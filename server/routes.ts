@@ -1,19 +1,14 @@
 
 import type { Express } from "express";
 import type { Server } from "http";
-import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { pairs } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Setup Auth first
-  await setupAuth(app);
-  registerAuthRoutes(app);
 
   // --- Pairs ---
   app.get(api.pairs.list.path, async (req, res) => {
@@ -22,9 +17,6 @@ export async function registerRoutes(
   });
 
   app.patch(api.pairs.update.path, async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    // Add admin check here if needed (e.g. check req.user.role)
-
     try {
       const input = api.pairs.update.input.parse(req.body);
       const pair = await storage.updatePair(Number(req.params.id), input);
@@ -83,9 +75,6 @@ export async function registerRoutes(
   });
 
   app.post(api.signals.create.path, async (req, res) => {
-    // Only allow manual creation for admin/testing
-    if (!req.isAuthenticated()) return res.sendStatus(401);
-    
     try {
       const input = api.signals.create.input.parse(req.body);
       const signal = await storage.createSignal(input);
@@ -103,13 +92,11 @@ export async function registerRoutes(
 
   // --- Admin: Users ---
   app.get(api.admin.users.list.path, async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
     const users = await storage.getAllUsers();
     res.json(users);
   });
 
   app.post(api.admin.users.block.path, async (req, res) => {
-    if (!req.isAuthenticated()) return res.sendStatus(401);
     const updated = await storage.updateUserBlockStatus(Number(req.params.id), req.body.isBlocked);
     res.json(updated);
   });
