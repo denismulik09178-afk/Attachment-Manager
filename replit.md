@@ -1,16 +1,15 @@
-# OTC Signals - Pocket Option Trading Signals Platform
+# Forex Signals - AI Trading Signals Platform
 
 ## Overview
 
-This is a web application that provides trading signals for Pocket Option OTC (Over-The-Counter) markets. The platform analyzes OTC charts and displays UP/DOWN signals with sparkline mini-charts, animated expiration timers, and trade results (WIN/LOSE). The application does NOT execute trades - it only provides signals for manual trading.
+This is a web application that provides AI-powered trading signals for Forex markets. The platform analyzes technical indicators and displays UP/DOWN signals with TradingView charts, animated expiration timers, and trade results (WIN/LOSE). The application does NOT execute trades - it only provides signals for manual trading.
 
-**Supported OTC Pairs:**
-- EUR/USD OTC
-- GBP/USD OTC
-- USD/JPY OTC
-- AUD/CAD OTC
-- EUR/GBP OTC
-- USD/CHF OTC
+**Supported Forex Pairs:**
+- EUR/USD, GBP/USD, USD/JPY, USD/CHF, USD/CAD, AUD/USD
+- EUR/JPY, GBP/JPY, EUR/GBP
+- AUD/CAD, AUD/CHF, AUD/JPY
+- CAD/CHF, CAD/JPY, CHF/JPY
+- EUR/AUD, EUR/CAD, GBP/AUD, GBP/CAD, GBP/CHF
 
 ## User Preferences
 
@@ -55,7 +54,7 @@ Preferred communication style: Simple, everyday language.
 
 3. **AI Integration**: OpenAI API (via Replit AI Integrations) for signal analysis and explanations.
 
-4. **Puppeteer Scraping**: Headless Chrome scrapes Pocket Option demo platform for real OTC prices - this is the only authorized data source per requirements.
+4. **TradingView Charts**: Embedded TradingView widgets display real-time Forex charts for each signal.
 
 5. **Signal Lifecycle**: Signals have `active` or `closed` status with automatic result calculation (WIN/LOSE/DRAW) based on direction and price movement.
 
@@ -67,18 +66,16 @@ Preferred communication style: Simple, everyday language.
 ### APIs and Services
 - **Replit Auth**: OAuth/OpenID Connect for user authentication
 - **OpenAI API**: Used for AI-powered signal analysis (configured via `AI_INTEGRATIONS_OPENAI_API_KEY` and `AI_INTEGRATIONS_OPENAI_BASE_URL`)
-- **Pocket Option**: Data source scraped via Puppeteer from their demo trading platform
+- **TradingView**: Real-time charts via embedded TradingView widgets
 
 ### Environment Variables Required
 - `DATABASE_URL`: PostgreSQL connection string
 - `SESSION_SECRET`: Secret for session encryption
 - `AI_INTEGRATIONS_OPENAI_API_KEY`: OpenAI API key
 - `AI_INTEGRATIONS_OPENAI_BASE_URL`: OpenAI API base URL
-- `CHROMIUM_PATH`: Path to Chromium binary for Puppeteer (optional, has default)
 
 ### Key NPM Packages
 - `drizzle-orm` / `drizzle-kit`: Database ORM and migrations
-- `puppeteer-core`: Headless browser for scraping
 - `openai`: AI API client
 - `express-session` / `connect-pg-simple`: Session management
 - `@tanstack/react-query`: Frontend data fetching
