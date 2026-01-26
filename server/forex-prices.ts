@@ -1,4 +1,7 @@
-const EXCHANGE_API_URL = 'https://api.exchangerate-api.com/v4/latest/USD';
+// Primary: fawazahmed0 API (NO RATE LIMITS!)
+const FAWAZ_API_URL = 'https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json';
+// Backup: exchangerate-api
+const BACKUP_API_URL = 'https://api.exchangerate-api.com/v4/latest/USD';
 
 interface ExchangeRates {
   rates: Record<string, number>;
@@ -7,7 +10,10 @@ interface ExchangeRates {
 
 let cachedRates: ExchangeRates | null = null;
 let lastFetchTime = 0;
-const CACHE_TTL = 60000; // 1 minute cache
+const CACHE_TTL = 30000; // 30 seconds cache
+
+// Store real price history for each pair
+const priceHistoryCache: Record<string, { prices: number[], lastUpdate: number }> = {};
 
 async function fetchExchangeRates(): Promise<ExchangeRates | null> {
   const now = Date.now();
@@ -17,15 +23,38 @@ async function fetchExchangeRates(): Promise<ExchangeRates | null> {
   }
 
   try {
-    const response = await fetch(EXCHANGE_API_URL);
+    // Try fawazahmed0 API first (NO LIMITS!)
+    const response = await fetch(FAWAZ_API_URL);
+    if (response.ok) {
+      const data = await response.json();
+      // Convert format: { usd: { eur: 0.92, ... } } -> { rates: { EUR: 0.92, ... } }
+      const rates: Record<string, number> = {};
+      if (data.usd) {
+        for (const [currency, rate] of Object.entries(data.usd)) {
+          rates[currency.toUpperCase()] = rate as number;
+        }
+      }
+      cachedRates = { rates, time_last_updated: now };
+      lastFetchTime = now;
+      console.log('[Forex] Fetched rates from fawazahmed0 API');
+      return cachedRates;
+    }
+  } catch (error) {
+    console.error('Fawaz API failed, trying backup:', error);
+  }
+
+  try {
+    // Backup API
+    const response = await fetch(BACKUP_API_URL);
     if (!response.ok) {
-      console.error(`Exchange API error: ${response.status}`);
+      console.error(`Backup API error: ${response.status}`);
       return cachedRates;
     }
 
     const data = await response.json();
     cachedRates = data;
     lastFetchTime = now;
+    console.log('[Forex] Fetched rates from backup API');
     return data;
   } catch (error) {
     console.error('Failed to fetch exchange rates:', error);
@@ -153,39 +182,68 @@ export async function generateAccurateMarketData(symbol: string): Promise<{
   const realPrice = await getRealPrice(symbol);
   const basePrice = realPrice || getFallbackPrice(symbol);
   
-  // Generate BALANCED price history - sometimes up trend, sometimes down trend
-  const volatility = symbol.includes('JPY') ? 0.03 : 0.00015;
-  const priceHistory: number[] = [];
+  const now = Date.now();
+  const cacheKey = symbol.replace('/', '');
   
-  // Randomly decide market condition for this moment
-  const marketCondition = Math.random();
-  let trendBias: number;
-  let startOffset: number;
+  // Initialize or update price history cache with REAL prices
+  if (!priceHistoryCache[cacheKey]) {
+    priceHistoryCache[cacheKey] = { prices: [], lastUpdate: 0 };
+  }
   
-  if (marketCondition < 0.33) {
-    // Bullish market - price came from below (RSI will be low-mid, good for UP signals)
-    trendBias = 0.55; // 55% up moves
-    startOffset = 1 + volatility * 15; // Start above, trending down to current
-  } else if (marketCondition < 0.66) {
-    // Bearish market - price came from above (RSI will be high, good for DOWN signals)
-    trendBias = 0.45; // 45% up moves (more down)
-    startOffset = 1 - volatility * 15; // Start below, trending up to current
+  const cache = priceHistoryCache[cacheKey];
+  
+  // Add new price every 10 seconds (building real history)
+  if (now - cache.lastUpdate > 10000 || cache.prices.length === 0) {
+    cache.prices.push(basePrice);
+    cache.lastUpdate = now;
+    
+    // Keep only last 100 prices
+    if (cache.prices.length > 100) {
+      cache.prices.shift();
+    }
+  }
+  
+  let priceHistory: number[];
+  
+  // If we have enough real history, use it!
+  if (cache.prices.length >= 20) {
+    priceHistory = [...cache.prices];
+    console.log(`[${symbol}] Using REAL price history: ${cache.prices.length} points`);
   } else {
-    // Neutral/sideways market
-    trendBias = 0.50; // 50/50
-    startOffset = 1;
+    // Not enough real data yet - generate balanced simulation
+    const volatility = symbol.includes('JPY') ? 0.02 : 0.0001;
+    priceHistory = [];
+    
+    // Start from a random position (not always below current price)
+    const marketCondition = Math.random();
+    let startPrice: number;
+    let trendBias: number;
+    
+    if (marketCondition < 0.33) {
+      // Price was higher before (downtrend to current = RSI low = UP signal)
+      startPrice = basePrice * (1 + volatility * 20);
+      trendBias = 0.4; // More down moves
+    } else if (marketCondition < 0.66) {
+      // Price was lower before (uptrend to current = RSI high = DOWN signal)
+      startPrice = basePrice * (1 - volatility * 20);
+      trendBias = 0.6; // More up moves
+    } else {
+      // Sideways
+      startPrice = basePrice;
+      trendBias = 0.5;
+    }
+    
+    let price = startPrice;
+    for (let i = 0; i < 49; i++) {
+      const trend = Math.random() < trendBias ? 1 : -1;
+      const change = Math.random() * volatility * trend;
+      price = price + change;
+      priceHistory.push(price);
+    }
+    priceHistory.push(basePrice); // Last = current real price
+    
+    console.log(`[${symbol}] Simulated history (condition: ${marketCondition < 0.33 ? 'BEARISH' : marketCondition < 0.66 ? 'BULLISH' : 'NEUTRAL'})`);
   }
-  
-  let price = basePrice * startOffset;
-  for (let i = 0; i < 50; i++) {
-    const trend = Math.random() < trendBias ? 1 : -1;
-    const change = Math.random() * volatility * trend;
-    price = price + change;
-    priceHistory.push(price);
-  }
-  
-  // Last price is the real current price
-  priceHistory[priceHistory.length - 1] = basePrice;
 
   const indicators = calculateTechnicalIndicators(priceHistory);
 
