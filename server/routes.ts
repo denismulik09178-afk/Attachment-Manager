@@ -189,16 +189,24 @@ export async function registerRoutes(
 - Великі таймфрейми = слідуй за ГОЛОВНИМ трендом
 - Ігноруй шум, дивись на загальну картину
 
-❌ НЕ ДАВАЙ СИГНАЛ ЯКЩО:
+⚖️ БАЛАНС НАПРЯМКІВ:
+- НЕ ВІДДАВАЙ ПЕРЕВАГУ жодному напрямку без причини!
+- UP і DOWN мають бути РІВНОЙМОВІРНІ якщо немає чіткого сигналу
+- Аналізуй КОЖЕН індикатор окремо і рахуй: скільки ЗА UP, скільки ЗА DOWN
+- Обирай напрямок ТІЛЬКИ якщо перевага мінімум 2 індикатори
+
+❌ ТОЧКА ВХОДУ НЕ ЗНАЙДЕНА якщо:
 - RSI в нейтральній зоні (40-60) БЕЗ інших підтверджень
-- Індикатори суперечать один одному
-- Ринок флетовий (боковий рух)
+- Індикатори суперечать один одному (наприклад RSI каже UP, EMA каже DOWN)
+- Ринок флетовий (боковий рух) - ціна в середині Боллінджера
+- Немає чіткої переваги UP чи DOWN (рівна кількість сигналів)
+- Для 1-2хв: немає екстремальних значень RSI чи Stochastic
 
 Відповідай ТІЛЬКИ у форматі JSON:
 {
-  "direction": "UP" або "DOWN",
-  "confidence": число від 70 до 95,
-  "analysis": "Детальне пояснення українською: які КОНКРЕТНІ індикатори підтверджують сигнал, чому саме цей напрямок, яка ймовірність успіху (4-5 речень)"
+  "direction": "UP" або "DOWN" або "NONE",
+  "confidence": число від 70 до 95 (0 якщо NONE),
+  "analysis": "Детальне пояснення українською: які КОНКРЕТНІ індикатори підтверджують сигнал, чому саме цей напрямок. Якщо NONE - поясни ЧОМУ точка входу не знайдена"
 }`
           },
           {
@@ -242,11 +250,20 @@ export async function registerRoutes(
 
       const aiResponse = JSON.parse(completion.choices[0]?.message?.content || "{}");
       
+      // Якщо AI каже NONE - точка входу не знайдена
+      if (aiResponse.direction === "NONE" || !aiResponse.direction || aiResponse.direction === "none") {
+        return res.status(200).json({
+          noEntry: true,
+          analysis: aiResponse.analysis || "Ринок в нейтральній зоні. Індикатори не дають чіткого сигналу.",
+          pair,
+        });
+      }
+      
       const sparkline = priceHistory.slice(-6);
       
       const signal = await storage.createSignal({
         pairId,
-        direction: aiResponse.direction || "UP",
+        direction: aiResponse.direction,
         timeframe,
         openPrice: currentPrice.toFixed(5),
         sparklineData: sparkline,
