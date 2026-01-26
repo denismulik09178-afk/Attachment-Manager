@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { Zap, TrendingUp, Clock, BarChart3, Brain, Sparkles, AlertTriangle, ChevronDown } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
+import { getSessionId } from "@/lib/session";
 
 export default function Dashboard() {
   const { data: signals, isLoading, refetch } = useSignals({ status: 'active' });
@@ -53,7 +54,10 @@ export default function Dashboard() {
       
       const res = await fetch('/api/signals/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Session-Id': getSessionId(),
+        },
         body: JSON.stringify({
           pairId: Number(selectedPair),
           timeframe: Number(selectedTimeframe),

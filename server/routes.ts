@@ -38,15 +38,14 @@ export async function registerRoutes(
   app.get(api.signals.list.path, async (req, res) => {
     const status = req.query.status as string;
     
-    // Get current user ID for filtering (each user sees only their signals)
-    const user = req.user as any;
-    const ownerId = user?.claims?.sub; // Direct Replit Auth user ID string
+    // Get session ID from header for browser-based isolation (NO Replit Auth dependency)
+    const sessionId = req.headers['x-session-id'] as string;
     
     let result;
     if (status === 'active') {
-      result = await storage.getActiveSignals(ownerId);
+      result = await storage.getActiveSignals(sessionId);
     } else {
-      result = await storage.getSignalHistory(ownerId, Number(req.query.limit) || 50);
+      result = await storage.getSignalHistory(sessionId, Number(req.query.limit) || 50);
     }
 
     // Enrich with pair data manually for now since we didn't do a join in storage
@@ -108,9 +107,8 @@ export async function registerRoutes(
     try {
       const { pairId, timeframe } = req.body;
       
-      // Get current user for signal ownership (direct Replit Auth user ID)
-      const user = req.user as any;
-      const ownerId = user?.claims?.sub;
+      // Get session ID from header for browser-based isolation
+      const ownerId = req.headers['x-session-id'] as string;
       
       const pair = await storage.getPair(pairId);
       if (!pair) {

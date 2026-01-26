@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import { getSessionId } from "@/lib/session";
 
 export function useSignals(params?: { status?: 'active' | 'closed', limit?: number }) {
   return useQuery({
@@ -11,7 +12,10 @@ export function useSignals(params?: { status?: 'active' | 'closed', limit?: numb
       if (params?.limit) cleanParams.limit = params.limit;
 
       const url = buildUrl(api.signals.list.path) + "?" + new URLSearchParams(cleanParams as any).toString();
-      const res = await fetch(url, { credentials: "include" });
+      const res = await fetch(url, { 
+        credentials: "include",
+        headers: { 'X-Session-Id': getSessionId() },
+      });
       if (!res.ok) throw new Error("Failed to fetch signals");
       return api.signals.list.responses[200].parse(await res.json());
     },
