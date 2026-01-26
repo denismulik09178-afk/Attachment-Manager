@@ -20,8 +20,8 @@ export interface IStorage {
   // Signals
   createSignal(signal: any): Promise<Signal>;
   getSignal(id: number): Promise<Signal | undefined>;
-  getActiveSignals(userId?: number): Promise<Signal[]>;
-  getSignalHistory(userId?: number, limit?: number): Promise<Signal[]>;
+  getActiveSignals(ownerId?: string): Promise<Signal[]>;
+  getSignalHistory(ownerId?: string, limit?: number): Promise<Signal[]>;
   getSignalStats(): Promise<{
     total: number;
     wins: number;
@@ -87,19 +87,19 @@ export class DatabaseStorage implements IStorage {
     return signal;
   }
 
-  async getActiveSignals(userId?: number): Promise<Signal[]> {
-    if (userId) {
+  async getActiveSignals(ownerId?: string): Promise<Signal[]> {
+    if (ownerId) {
       return await db.select().from(signals)
-        .where(and(eq(signals.status, 'active'), eq(signals.userId, userId)))
+        .where(and(eq(signals.status, 'active'), eq(signals.ownerId, ownerId)))
         .orderBy(desc(signals.openTime));
     }
     return await db.select().from(signals).where(eq(signals.status, 'active')).orderBy(desc(signals.openTime));
   }
 
-  async getSignalHistory(userId?: number, limit = 50): Promise<Signal[]> {
-    if (userId) {
+  async getSignalHistory(ownerId?: string, limit = 50): Promise<Signal[]> {
+    if (ownerId) {
       return await db.select().from(signals)
-        .where(and(eq(signals.status, 'closed'), eq(signals.userId, userId)))
+        .where(and(eq(signals.status, 'closed'), eq(signals.ownerId, ownerId)))
         .orderBy(desc(signals.closeTime))
         .limit(limit);
     }
