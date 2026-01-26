@@ -4,6 +4,12 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import OpenAI from "openai";
+
+const openai = new OpenAI({
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+});
 
 export async function registerRoutes(
   httpServer: Server,
@@ -87,6 +93,139 @@ export async function registerRoutes(
         });
       }
       throw err;
+    }
+  });
+
+  // AI Signal Generation
+  app.post("/api/signals/generate", async (req, res) => {
+    try {
+      const { pairId, timeframe } = req.body;
+      
+      const pair = await storage.getPair(pairId);
+      if (!pair) {
+        return res.status(404).json({ message: "Pair not found" });
+      }
+
+      // Generate simulated market data for AI to analyze
+      const basePrice = 1.0500 + Math.random() * 0.02;
+      const priceHistory = Array.from({ length: 20 }, (_, i) => 
+        basePrice + (Math.random() - 0.5) * 0.003
+      );
+      
+      const rsi = 30 + Math.random() * 40; // RSI between 30-70
+      const ema50 = priceHistory.slice(-10).reduce((a, b) => a + b, 0) / 10;
+      const ema200 = priceHistory.reduce((a, b) => a + b, 0) / 20;
+      const currentPrice = priceHistory[priceHistory.length - 1];
+
+      // AI Analysis
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: `Ти професійний трейдер бінарних опціонів. Аналізуй технічні індикатори та давай чіткі сигнали.
+            
+Відповідай ТІЛЬКИ у форматі JSON:
+{
+  "direction": "UP" або "DOWN",
+  "confidence": число від 60 до 95,
+  "analysis": "Коротке пояснення українською чому ти обрав цей напрямок (2-3 речення про RSI, EMA, тренд)"
+}`
+          },
+          {
+            role: "user",
+            content: `Проаналізуй ${pair.symbol} для ${timeframe}-хвилинної експірації:
+- Поточна ціна: ${currentPrice.toFixed(5)}
+- RSI(14): ${rsi.toFixed(1)}
+- EMA50: ${ema50.toFixed(5)}
+- EMA200: ${ema200.toFixed(5)}
+- Останні ціни: ${priceHistory.slice(-5).map(p => p.toFixed(5)).join(', ')}
+
+Дай сигнал UP або DOWN з поясненням.`
+          }
+        ],
+        max_completion_tokens: 300,
+        response_format: { type: "json_object" }
+      });
+
+      const aiResponse = JSON.parse(completion.choices[0]?.message?.content || "{}");
+      
+      const sparkline = priceHistory.slice(-6);
+      
+      const signal = await storage.createSignal({
+        pairId,
+        direction: aiResponse.direction || "UP",
+        timeframe,
+        openPrice: currentPrice.toFixed(5),
+        sparklineData: sparkline,
+        analysis: aiResponse.analysis || "Технічний аналіз показує сприятливі умови для входу.",
+        currentPrice: currentPrice.toFixed(5),
+      });
+
+      // Enrich with pair data
+      const enrichedSignal = {
+        ...signal,
+        pair,
+        confidence: aiResponse.confidence || 75,
+      };
+
+      res.status(201).json(enrichedSignal);
+    } catch (err) {
+      console.error("AI Signal generation error:", err);
+      res.status(500).json({ message: "Failed to generate signal" });
+    }
+  });
+
+  // Update signal price (for live tracking)
+  app.patch("/api/signals/:id/price", async (req, res) => {
+    try {
+      const signalId = Number(req.params.id);
+      const signal = await storage.getSignal(signalId);
+      
+      if (!signal) {
+        return res.status(404).json({ message: "Signal not found" });
+      }
+
+      // Simulate price movement
+      const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
+      const newPrice = currentPrice + (Math.random() - 0.5) * 0.0005;
+      
+      const updated = await storage.updateSignalPrice(signalId, newPrice.toFixed(5));
+      res.json(updated);
+    } catch (err) {
+      console.error("Update price error:", err);
+      res.status(500).json({ message: "Failed to update price" });
+    }
+  });
+
+  // Close signal (check result)
+  app.patch("/api/signals/:id/close", async (req, res) => {
+    try {
+      const signalId = Number(req.params.id);
+      const signal = await storage.getSignal(signalId);
+      
+      if (!signal) {
+        return res.status(404).json({ message: "Signal not found" });
+      }
+
+      const openPrice = parseFloat(signal.openPrice);
+      const closePrice = parseFloat(signal.currentPrice || signal.openPrice);
+      
+      let result: 'WIN' | 'LOSE' | 'DRAW';
+      if (signal.direction === 'UP') {
+        result = closePrice > openPrice ? 'WIN' : closePrice < openPrice ? 'LOSE' : 'DRAW';
+      } else {
+        result = closePrice < openPrice ? 'WIN' : closePrice > openPrice ? 'LOSE' : 'DRAW';
+      }
+      
+      const updated = await storage.closeSignal(signalId, closePrice.toFixed(5), result);
+      
+      // Enrich with pair
+      const pair = await storage.getPair(signal.pairId);
+      res.json({ ...updated, pair });
+    } catch (err) {
+      console.error("Close signal error:", err);
+      res.status(500).json({ message: "Failed to close signal" });
     }
   });
 

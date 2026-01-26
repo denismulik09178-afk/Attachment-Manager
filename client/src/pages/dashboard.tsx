@@ -6,50 +6,64 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
-import { Zap, TrendingUp, Clock, BarChart3 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Zap, TrendingUp, Clock, BarChart3, Brain, Sparkles } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 
 export default function Dashboard() {
-  const { data: signals, isLoading } = useSignals({ status: 'active' });
+  const { data: signals, isLoading, refetch } = useSignals({ status: 'active' });
   const { data: pairs } = usePairs();
   const queryClient = useQueryClient();
   
   const [selectedPair, setSelectedPair] = useState<string>("");
   const [selectedTimeframe, setSelectedTimeframe] = useState<string>("1");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [analysisText, setAnalysisText] = useState("");
+
+  // Poll for price updates every 5 seconds
+  useEffect(() => {
+    if (!signals || signals.length === 0) return;
+
+    const interval = setInterval(async () => {
+      for (const signal of signals) {
+        if (signal.status === 'active') {
+          try {
+            await fetch(`/api/signals/${signal.id}/price`, {
+              method: 'PATCH',
+              credentials: 'include',
+            });
+          } catch (e) {
+            console.error("Price update failed", e);
+          }
+        }
+      }
+      refetch();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [signals, refetch]);
 
   const generateSignal = useMutation({
     mutationFn: async () => {
       if (!selectedPair) throw new Error("Select a pair");
       
-      const directions = ['UP', 'DOWN'];
-      const randomDirection = directions[Math.floor(Math.random() * 2)];
-      const basePrice = 1.0500 + Math.random() * 0.01;
-      
-      const sparkline = Array.from({ length: 6 }, () => 
-        basePrice + (Math.random() - 0.5) * 0.002
-      );
-
-      const res = await fetch(api.signals.create.path, {
+      const res = await fetch('/api/signals/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pairId: Number(selectedPair),
-          direction: randomDirection,
           timeframe: Number(selectedTimeframe),
-          openPrice: basePrice.toFixed(4),
-          sparklineData: sparkline,
         }),
         credentials: 'include',
       });
       
-      if (!res.ok) throw new Error("Failed to create signal");
+      if (!res.ok) throw new Error("Failed to generate signal");
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: [api.signals.list.path] });
+      setAnalysisText(data.analysis || "");
       setIsGenerating(false);
     },
     onError: () => {
@@ -60,9 +74,8 @@ export default function Dashboard() {
   const handleGetSignal = () => {
     if (!selectedPair) return;
     setIsGenerating(true);
-    setTimeout(() => {
-      generateSignal.mutate();
-    }, 1500);
+    setAnalysisText("");
+    generateSignal.mutate();
   };
 
   const enabledPairs = pairs?.filter((p: any) => p.isEnabled) || [];
@@ -77,8 +90,9 @@ export default function Dashboard() {
         <Card className="border-2 border-primary/20 bg-gradient-to-br from-background to-muted/20">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl">
-              <Zap className="text-yellow-500" />
-              Генератор Сигналів
+              <Brain className="text-purple-500" />
+              AI Генератор Сигналів
+              <Sparkles className="text-yellow-500 h-5 w-5" />
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -122,7 +136,7 @@ export default function Dashboard() {
               <div className="flex items-end">
                 <Button 
                   size="lg" 
-                  className="w-full h-10 relative overflow-hidden"
+                  className="w-full h-10 relative overflow-visible"
                   onClick={handleGetSignal}
                   disabled={!selectedPair || isGenerating}
                   data-testid="button-get-signal"
@@ -140,9 +154,9 @@ export default function Dashboard() {
                           animate={{ rotate: 360 }}
                           transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
                         >
-                          <TrendingUp size={18} />
+                          <Brain size={18} />
                         </motion.div>
-                        Аналіз...
+                        AI Аналіз...
                       </motion.div>
                     ) : (
                       <motion.div
@@ -169,15 +183,39 @@ export default function Dashboard() {
               >
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
                   <motion.div
-                    className="h-full bg-gradient-to-r from-green-500 to-blue-500"
+                    className="h-full bg-gradient-to-r from-purple-500 via-blue-500 to-green-500"
                     initial={{ width: "0%" }}
                     animate={{ width: "100%" }}
-                    transition={{ duration: 1.5, ease: "easeInOut" }}
+                    transition={{ duration: 2, ease: "easeInOut" }}
                   />
                 </div>
-                <p className="text-sm text-muted-foreground mt-2 text-center">
-                  Аналізуємо RSI, EMA50, EMA200...
-                </p>
+                <div className="flex items-center gap-2 mt-3">
+                  <motion.div
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ repeat: Infinity, duration: 0.8 }}
+                  >
+                    <Brain className="text-purple-500" size={20} />
+                  </motion.div>
+                  <p className="text-sm text-muted-foreground">
+                    Аналізуємо RSI, EMA50, EMA200, тренди та патерни...
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
+            {analysisText && !isGenerating && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 bg-muted/50 rounded-lg border border-primary/20"
+              >
+                <div className="flex items-start gap-3">
+                  <Brain className="text-purple-500 mt-1 shrink-0" size={20} />
+                  <div>
+                    <p className="font-medium text-sm text-primary mb-1">AI Аналіз:</p>
+                    <p className="text-sm text-foreground">{analysisText}</p>
+                  </div>
+                </div>
               </motion.div>
             )}
           </CardContent>
@@ -203,14 +241,14 @@ export default function Dashboard() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
           </span>
-          <span className="text-sm text-muted-foreground">Live Feed</span>
+          <span className="text-sm text-muted-foreground">Live (кожні 5 сек)</span>
         </motion.div>
       </div>
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-[200px] w-full rounded-xl" />
+            <Skeleton key={i} className="h-[280px] w-full rounded-xl" />
           ))}
         </div>
       ) : !signals || signals.length === 0 ? (
@@ -235,7 +273,7 @@ export default function Dashboard() {
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ delay: index * 0.1 }}
               >
-                <SignalCard signal={signal} />
+                <SignalCard signal={signal} onClose={refetch} />
               </motion.div>
             ))}
           </AnimatePresence>

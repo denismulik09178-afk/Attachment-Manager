@@ -18,7 +18,8 @@ export interface IStorage {
   createPair(pair: Partial<Pair>): Promise<Pair>; // Helper for seeding
 
   // Signals
-  createSignal(signal: InsertSignal): Promise<Signal>;
+  createSignal(signal: any): Promise<Signal>;
+  getSignal(id: number): Promise<Signal | undefined>;
   getActiveSignals(): Promise<Signal[]>;
   getSignalHistory(limit?: number): Promise<Signal[]>;
   getSignalStats(): Promise<{
@@ -27,7 +28,8 @@ export interface IStorage {
     losses: number;
     byPair: Record<string, { total: number; wins: number }>;
   }>;
-  closeSignal(id: number, result: string, closePrice: string): Promise<Signal>;
+  updateSignalPrice(id: number, currentPrice: string): Promise<Signal>;
+  closeSignal(id: number, closePrice: string, result: string): Promise<Signal>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -75,9 +77,14 @@ export class DatabaseStorage implements IStorage {
     return newPair;
   }
 
-  async createSignal(signal: InsertSignal): Promise<Signal> {
+  async createSignal(signal: any): Promise<Signal> {
     const [newSignal] = await db.insert(signals).values(signal).returning();
     return newSignal;
+  }
+
+  async getSignal(id: number): Promise<Signal | undefined> {
+    const [signal] = await db.select().from(signals).where(eq(signals.id, id));
+    return signal;
   }
 
   async getActiveSignals(): Promise<Signal[]> {
@@ -117,7 +124,14 @@ export class DatabaseStorage implements IStorage {
     return { total, wins, losses, byPair };
   }
 
-  async closeSignal(id: number, result: string, closePrice: string): Promise<Signal> {
+  async updateSignalPrice(id: number, currentPrice: string): Promise<Signal> {
+    const [signal] = await db.update(signals).set({
+      currentPrice,
+    }).where(eq(signals.id, id)).returning();
+    return signal;
+  }
+
+  async closeSignal(id: number, closePrice: string, result: string): Promise<Signal> {
     const [signal] = await db.update(signals).set({
       status: 'closed',
       result,

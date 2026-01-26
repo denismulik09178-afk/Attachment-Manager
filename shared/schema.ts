@@ -26,12 +26,13 @@ export const signals = pgTable("signals", {
   timeframe: integer("timeframe").notNull(), // in minutes: 1, 3, 5
   openPrice: decimal("open_price").notNull(),
   closePrice: decimal("close_price"),
+  currentPrice: decimal("current_price"),
   result: text("result"), // 'WIN', 'LOSE', 'DRAW'
   status: text("status").default("active").notNull(), // 'active', 'closed'
   openTime: timestamp("open_time").defaultNow().notNull(),
   closeTime: timestamp("close_time"),
-  // Store candle data for the sparkline as a JSON array of numbers
-  sparklineData: jsonb("sparkline_data").$type<number[]>(), 
+  sparklineData: jsonb("sparkline_data").$type<number[]>(),
+  analysis: text("analysis"), // AI explanation of why this signal was generated
 });
 
 // Settings for indicators (can be expanded)
