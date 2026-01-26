@@ -1,9 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowUp, ArrowDown, Clock, DollarSign, TrendingUp, TrendingDown, Trophy, XCircle } from "lucide-react";
-import { LineChart, Line, ResponsiveContainer, YAxis } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect, useState, useCallback } from "react";
+import { TradingViewWidget } from "./tradingview-widget";
 
 interface SignalCardProps {
   signal: any;
@@ -26,10 +26,6 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
   const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
   const priceDiff = currentPrice - openPrice;
   const isWinning = isUp ? priceDiff > 0 : priceDiff < 0;
-
-  const data = signal.sparklineData 
-    ? signal.sparklineData.map((val: number, i: number) => ({ i, val })) 
-    : [];
 
   const closeSignal = useCallback(async () => {
     try {
@@ -223,12 +219,12 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
           </div>
         </div>
         
-        <div className="text-center">
+        <div className="flex items-center justify-center gap-4">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 200, damping: 15 }}
-            className={`inline-flex items-center justify-center w-16 h-16 rounded-full border-4 ${isWinning ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10'}`}
+            className={`inline-flex items-center justify-center w-14 h-14 rounded-full border-4 ${isWinning ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10'}`}
           >
             <motion.div
               animate={{ 
@@ -237,31 +233,19 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
               transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
             >
               {isUp ? (
-                <ArrowUp size={32} className={isWinning ? 'text-green-500' : 'text-red-500'} />
+                <ArrowUp size={28} className={isWinning ? 'text-green-500' : 'text-red-500'} />
               ) : (
-                <ArrowDown size={32} className={isWinning ? 'text-green-500' : 'text-red-500'} />
+                <ArrowDown size={28} className={isWinning ? 'text-green-500' : 'text-red-500'} />
               )}
             </motion.div>
           </motion.div>
-          <p className={`text-xs mt-1 font-medium ${isWinning ? 'text-green-500' : 'text-red-500'}`}>
-            {isWinning ? 'В плюсі' : 'В мінусі'}
+          <p className={`text-lg font-bold ${isWinning ? 'text-green-500' : 'text-red-500'}`}>
+            {isWinning ? 'В ПЛЮСІ' : 'В МІНУСІ'}
           </p>
         </div>
 
-        <div className="h-[40px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
-              <YAxis domain={['dataMin', 'dataMax']} hide />
-              <Line 
-                type="monotone" 
-                dataKey="val" 
-                stroke={isWinning ? "#22c55e" : "#ef4444"} 
-                strokeWidth={2} 
-                dot={false}
-                isAnimationActive={true}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+        <div className="rounded-lg overflow-hidden border border-border">
+          <TradingViewWidget symbol={signal.pair?.symbol || 'EUR/USD'} height={250} />
         </div>
         
         <div className="space-y-1">

@@ -5,15 +5,41 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
-import { getMarketData, getCurrentPrice, initBrowser } from "./pocket-option-scraper";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
-// Try to initialize browser in background
-initBrowser().catch(console.error);
+function getForexBasePrice(symbol: string): number {
+  const basePrices: Record<string, number> = {
+    'EUR/USD': 1.0850, 'GBP/USD': 1.2650, 'USD/JPY': 149.50,
+    'USD/CHF': 0.8850, 'USD/CAD': 1.3550, 'AUD/USD': 0.6550,
+    'EUR/JPY': 162.20, 'GBP/JPY': 189.00, 'EUR/GBP': 0.8580,
+    'AUD/CAD': 0.8900, 'AUD/CHF': 0.5800, 'AUD/JPY': 97.80,
+    'CAD/CHF': 0.6530, 'CAD/JPY': 110.30, 'CHF/JPY': 168.90,
+    'EUR/AUD': 1.6550, 'EUR/CAD': 1.4700, 'GBP/AUD': 1.9300,
+    'GBP/CAD': 1.7100, 'GBP/CHF': 1.1200,
+  };
+  return basePrices[symbol] || 1.0000;
+}
+
+function generateMarketData(symbol: string) {
+  const basePrice = getForexBasePrice(symbol);
+  const volatility = symbol.includes('JPY') ? 0.05 : 0.0003;
+  
+  const priceHistory = Array.from({ length: 20 }, () => 
+    basePrice + (Math.random() - 0.5) * volatility * 10
+  );
+  const currentPrice = basePrice + (Math.random() - 0.5) * volatility;
+  priceHistory[priceHistory.length - 1] = currentPrice;
+  
+  const rsi = 30 + Math.random() * 40;
+  const ema50 = priceHistory.slice(-10).reduce((a, b) => a + b, 0) / 10;
+  const ema200 = priceHistory.reduce((a, b) => a + b, 0) / 20;
+
+  return { currentPrice, priceHistory, rsi, ema50, ema200 };
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -110,8 +136,8 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pair not found" });
       }
 
-      // Get real market data from Pocket Option via DOM scraping
-      const marketData = await getMarketData(pair.symbol);
+      // Generate market data for AI analysis
+      const marketData = generateMarketData(pair.symbol);
       const { currentPrice, priceHistory, rsi, ema50, ema200 } = marketData;
 
       // AI Analysis
@@ -173,7 +199,7 @@ export async function registerRoutes(
     }
   });
 
-  // Update signal price (for live tracking from Pocket Option)
+  // Update signal price (for live tracking)
   app.patch("/api/signals/:id/price", async (req, res) => {
     try {
       const signalId = Number(req.params.id);
@@ -183,23 +209,10 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Signal not found" });
       }
 
-      // Get real price from Pocket Option
       const pair = await storage.getPair(signal.pairId);
-      let newPrice: number;
-      
-      if (pair) {
-        const realPrice = await getCurrentPrice(pair.symbol);
-        if (realPrice) {
-          newPrice = realPrice;
-        } else {
-          // Fallback to simulated price if scraping fails
-          const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
-          newPrice = currentPrice + (Math.random() - 0.5) * 0.0005;
-        }
-      } else {
-        const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
-        newPrice = currentPrice + (Math.random() - 0.5) * 0.0005;
-      }
+      const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
+      const volatility = pair?.symbol.includes('JPY') ? 0.02 : 0.0002;
+      const newPrice = currentPrice + (Math.random() - 0.5) * volatility;
       
       const updated = await storage.updateSignalPrice(signalId, newPrice.toFixed(5));
       res.json(updated);
@@ -261,42 +274,29 @@ async function seedDatabase() {
   const existingPairs = await storage.getAllPairs();
   if (existingPairs.length === 0) {
     const pairsToCreate = [
-      { symbol: 'EUR/USD OTC', name: 'Euro / US Dollar OTC', payout: 92 },
-      { symbol: 'GBP/USD OTC', name: 'British Pound / US Dollar OTC', payout: 90 },
-      { symbol: 'USD/JPY OTC', name: 'US Dollar / Japanese Yen OTC', payout: 89 },
-      { symbol: 'AUD/CAD OTC', name: 'Australian Dollar / Canadian Dollar OTC', payout: 85 },
+      { symbol: 'EUR/USD', name: 'Euro / US Dollar', payout: 85 },
+      { symbol: 'GBP/USD', name: 'British Pound / US Dollar', payout: 85 },
+      { symbol: 'USD/JPY', name: 'US Dollar / Japanese Yen', payout: 85 },
+      { symbol: 'USD/CHF', name: 'US Dollar / Swiss Franc', payout: 85 },
+      { symbol: 'USD/CAD', name: 'US Dollar / Canadian Dollar', payout: 85 },
+      { symbol: 'AUD/USD', name: 'Australian Dollar / US Dollar', payout: 85 },
+      { symbol: 'EUR/JPY', name: 'Euro / Japanese Yen', payout: 85 },
+      { symbol: 'GBP/JPY', name: 'British Pound / Japanese Yen', payout: 85 },
+      { symbol: 'AUD/CAD', name: 'Australian Dollar / Canadian Dollar', payout: 85 },
+      { symbol: 'AUD/CHF', name: 'Australian Dollar / Swiss Franc', payout: 85 },
+      { symbol: 'AUD/JPY', name: 'Australian Dollar / Japanese Yen', payout: 85 },
+      { symbol: 'CAD/CHF', name: 'Canadian Dollar / Swiss Franc', payout: 85 },
+      { symbol: 'CAD/JPY', name: 'Canadian Dollar / Japanese Yen', payout: 85 },
+      { symbol: 'CHF/JPY', name: 'Swiss Franc / Japanese Yen', payout: 85 },
+      { symbol: 'EUR/AUD', name: 'Euro / Australian Dollar', payout: 85 },
+      { symbol: 'EUR/CAD', name: 'Euro / Canadian Dollar', payout: 85 },
+      { symbol: 'GBP/AUD', name: 'British Pound / Australian Dollar', payout: 85 },
+      { symbol: 'GBP/CAD', name: 'British Pound / Canadian Dollar', payout: 85 },
+      { symbol: 'GBP/CHF', name: 'British Pound / Swiss Franc', payout: 85 },
     ];
     
     for (const p of pairsToCreate) {
       await storage.createPair(p);
-    }
-    
-    // Create some dummy signals for history
-    const allPairs = await storage.getAllPairs();
-    const eurUsd = allPairs.find(p => p.symbol === 'EUR/USD OTC');
-    
-    if (eurUsd) {
-        // Active signal
-        await storage.createSignal({
-            pairId: eurUsd.id,
-            direction: 'UP',
-            timeframe: 1,
-            openPrice: "1.0520",
-            status: 'active',
-            sparklineData: [1.0510, 1.0512, 1.0515, 1.0511, 1.0518, 1.0520],
-        });
-
-        // Closed signals
-        await storage.createSignal({
-            pairId: eurUsd.id,
-            direction: 'DOWN',
-            timeframe: 3,
-            openPrice: "1.0550",
-            closePrice: "1.0540",
-            result: 'WIN',
-            status: 'closed',
-            sparklineData: [1.0560, 1.0555, 1.0550, 1.0545, 1.0540],
-        });
     }
   }
 }
