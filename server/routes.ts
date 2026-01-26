@@ -5,41 +5,12 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
+import { generateAccurateMarketData, getRealPrice } from "./forex-prices";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
-
-function getForexBasePrice(symbol: string): number {
-  const basePrices: Record<string, number> = {
-    'EUR/USD': 1.0850, 'GBP/USD': 1.2650, 'USD/JPY': 149.50,
-    'USD/CHF': 0.8850, 'USD/CAD': 1.3550, 'AUD/USD': 0.6550,
-    'EUR/JPY': 162.20, 'GBP/JPY': 189.00, 'EUR/GBP': 0.8580,
-    'AUD/CAD': 0.8900, 'AUD/CHF': 0.5800, 'AUD/JPY': 97.80,
-    'CAD/CHF': 0.6530, 'CAD/JPY': 110.30, 'CHF/JPY': 168.90,
-    'EUR/AUD': 1.6550, 'EUR/CAD': 1.4700, 'GBP/AUD': 1.9300,
-    'GBP/CAD': 1.7100, 'GBP/CHF': 1.1200,
-  };
-  return basePrices[symbol] || 1.0000;
-}
-
-function generateMarketData(symbol: string) {
-  const basePrice = getForexBasePrice(symbol);
-  const volatility = symbol.includes('JPY') ? 0.05 : 0.0003;
-  
-  const priceHistory = Array.from({ length: 20 }, () => 
-    basePrice + (Math.random() - 0.5) * volatility * 10
-  );
-  const currentPrice = basePrice + (Math.random() - 0.5) * volatility;
-  priceHistory[priceHistory.length - 1] = currentPrice;
-  
-  const rsi = 30 + Math.random() * 40;
-  const ema50 = priceHistory.slice(-10).reduce((a, b) => a + b, 0) / 10;
-  const ema200 = priceHistory.reduce((a, b) => a + b, 0) / 20;
-
-  return { currentPrice, priceHistory, rsi, ema50, ema200 };
-}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -136,38 +107,79 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pair not found" });
       }
 
-      // Generate market data for AI analysis
-      const marketData = generateMarketData(pair.symbol);
-      const { currentPrice, priceHistory, rsi, ema50, ema200 } = marketData;
+      // Get real market data with accurate indicators
+      const marketData = await generateAccurateMarketData(pair.symbol);
+      const { currentPrice, priceHistory, indicators } = marketData;
 
-      // AI Analysis
+      // Advanced AI Analysis with comprehensive technical data
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
-            content: `Ти професійний трейдер бінарних опціонів. Аналізуй технічні індикатори та давай чіткі сигнали.
-            
+            content: `Ти експертний трейдер з 15+ роками досвіду в бінарних опціонах та Forex. Ти аналізуєш ринок з ХІРУРГІЧНОЮ ТОЧНІСТЮ.
+
+ПРАВИЛА АНАЛІЗУ:
+1. RSI < 30 = СИЛЬНИЙ сигнал UP (перепроданість)
+2. RSI > 70 = СИЛЬНИЙ сигнал DOWN (перекупленість)
+3. RSI 30-70 = аналізуй EMA та тренд
+4. EMA9 > EMA21 = короткостроковий БИЧИЙ тренд
+5. EMA9 < EMA21 = короткостроковий ВЕДМЕЖИЙ тренд
+6. Ціна біля нижньої Боллінджер = можливий відскок UP
+7. Ціна біля верхньої Боллінджер = можливий відскок DOWN
+8. MACD > Signal = БИЧИЙ імпульс
+9. MACD < Signal = ВЕДМЕЖИЙ імпульс
+10. Stochastic < 20 = перепроданість = UP
+11. Stochastic > 80 = перекупленість = DOWN
+
+ДЛЯ 1-ХВИЛИННОЇ ЕКСПІРАЦІЇ:
+- Шукай миттєві розвороти (RSI екстремуми, Боллінджер відскоки)
+- Пріоритет: RSI + Stochastic сигнали
+
+ДЛЯ 3-5 ХВИЛИННОЇ ЕКСПІРАЦІЇ:  
+- Слідуй за трендом (EMA кросовери)
+- Пріоритет: EMA + MACD сигнали
+
 Відповідай ТІЛЬКИ у форматі JSON:
 {
   "direction": "UP" або "DOWN",
-  "confidence": число від 60 до 95,
-  "analysis": "Коротке пояснення українською чому ти обрав цей напрямок (2-3 речення про RSI, EMA, тренд)"
+  "confidence": число від 65 до 92,
+  "analysis": "Детальне пояснення українською: які індикатори підтверджують сигнал, чому саме цей напрямок (3-4 речення)"
 }`
           },
           {
             role: "user",
-            content: `Проаналізуй ${pair.symbol} для ${timeframe}-хвилинної експірації:
-- Поточна ціна: ${currentPrice.toFixed(5)}
-- RSI(14): ${rsi.toFixed(1)}
-- EMA50: ${ema50.toFixed(5)}
-- EMA200: ${ema200.toFixed(5)}
-- Останні ціни: ${priceHistory.slice(-5).map(p => p.toFixed(5)).join(', ')}
+            content: `АНАЛІЗ ${pair.symbol} для ${timeframe}-хвилинної експірації:
 
-Дай сигнал UP або DOWN з поясненням.`
+📊 ПОТОЧНА ЦІНА: ${currentPrice.toFixed(5)}
+
+📈 ІНДИКАТОРИ:
+- RSI(14): ${indicators.rsi.toFixed(1)} ${indicators.rsi < 30 ? '⚠️ ПЕРЕПРОДАНІСТЬ' : indicators.rsi > 70 ? '⚠️ ПЕРЕКУПЛЕНІСТЬ' : ''}
+- Stochastic K: ${indicators.stochK.toFixed(1)} ${indicators.stochK < 20 ? '⚠️ ПЕРЕПРОДАНІСТЬ' : indicators.stochK > 80 ? '⚠️ ПЕРЕКУПЛЕНІСТЬ' : ''}
+
+📉 КОВЗАЮЧІ СЕРЕДНІ:
+- EMA9: ${indicators.ema9.toFixed(5)}
+- EMA21: ${indicators.ema21.toFixed(5)}
+- EMA50: ${indicators.ema50.toFixed(5)}
+- Тренд: ${indicators.trend}
+
+📊 БОЛЛІНДЖЕР:
+- Верхня: ${indicators.bollingerUpper.toFixed(5)}
+- Середня: ${indicators.sma20.toFixed(5)}
+- Нижня: ${indicators.bollingerLower.toFixed(5)}
+- Позиція ціни: ${currentPrice > indicators.bollingerUpper ? 'ВИЩЕ верхньої' : currentPrice < indicators.bollingerLower ? 'НИЖЧЕ нижньої' : 'В КАНАЛІ'}
+
+📈 MACD:
+- MACD: ${indicators.macd.toFixed(6)}
+- Signal: ${indicators.macdSignal.toFixed(6)}
+- Імпульс: ${indicators.macd > indicators.macdSignal ? 'БИЧИЙ' : 'ВЕДМЕЖИЙ'}
+
+🕯️ ОСТАННІ ЦІНИ: ${priceHistory.slice(-5).map(p => p.toFixed(5)).join(' → ')}
+
+Дай ТОЧНИЙ сигнал на основі комплексного аналізу!`
           }
         ],
-        max_completion_tokens: 300,
+        max_completion_tokens: 400,
         response_format: { type: "json_object" }
       });
 
@@ -199,7 +211,7 @@ export async function registerRoutes(
     }
   });
 
-  // Update signal price (for live tracking)
+  // Update signal price (for live tracking with real prices)
   app.patch("/api/signals/:id/price", async (req, res) => {
     try {
       const signalId = Number(req.params.id);
@@ -210,9 +222,21 @@ export async function registerRoutes(
       }
 
       const pair = await storage.getPair(signal.pairId);
-      const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
-      const volatility = pair?.symbol.includes('JPY') ? 0.02 : 0.0002;
-      const newPrice = currentPrice + (Math.random() - 0.5) * volatility;
+      let newPrice: number;
+
+      if (pair) {
+        const realPrice = await getRealPrice(pair.symbol);
+        if (realPrice) {
+          newPrice = realPrice;
+        } else {
+          const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
+          const volatility = pair.symbol.includes('JPY') ? 0.01 : 0.0001;
+          newPrice = currentPrice + (Math.random() - 0.5) * volatility;
+        }
+      } else {
+        const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
+        newPrice = currentPrice + (Math.random() - 0.5) * 0.0001;
+      }
       
       const updated = await storage.updateSignalPrice(signalId, newPrice.toFixed(5));
       res.json(updated);
