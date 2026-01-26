@@ -25,7 +25,9 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
   const openPrice = parseFloat(signal.openPrice);
   const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
   const priceDiff = currentPrice - openPrice;
-  const isWinning = isUp ? priceDiff > 0 : priceDiff < 0;
+  
+  // Правильна логіка: UP виграє якщо ціна зросла, DOWN виграє якщо ціна впала
+  const isWinning = signal.direction === 'UP' ? currentPrice > openPrice : currentPrice < openPrice;
 
   const closeSignal = useCallback(async () => {
     try {

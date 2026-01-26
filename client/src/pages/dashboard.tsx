@@ -91,7 +91,7 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-2xl">
               <Brain className="text-purple-500" />
-              AI Генератор Сигналів
+              DENI AI BOT
               <Sparkles className="text-yellow-500 h-5 w-5" />
             </CardTitle>
           </CardHeader>

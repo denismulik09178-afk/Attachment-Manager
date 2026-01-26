@@ -48,7 +48,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <header className="h-14 border-b flex items-center px-4 gap-4 sticky top-0 bg-background/80 backdrop-blur z-10">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="ml-auto flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">Pocket Option OTC</span>
+              <span className="text-sm text-muted-foreground">DENI AI BOT</span>
             </div>
           </header>
           <div className="p-6">
