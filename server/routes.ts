@@ -5,11 +5,15 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
+import { getMarketData, getCurrentPrice, initBrowser } from "./pocket-option-scraper";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
+
+// Try to initialize browser in background
+initBrowser().catch(console.error);
 
 export async function registerRoutes(
   httpServer: Server,
@@ -106,16 +110,9 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pair not found" });
       }
 
-      // Generate simulated market data for AI to analyze
-      const basePrice = 1.0500 + Math.random() * 0.02;
-      const priceHistory = Array.from({ length: 20 }, (_, i) => 
-        basePrice + (Math.random() - 0.5) * 0.003
-      );
-      
-      const rsi = 30 + Math.random() * 40; // RSI between 30-70
-      const ema50 = priceHistory.slice(-10).reduce((a, b) => a + b, 0) / 10;
-      const ema200 = priceHistory.reduce((a, b) => a + b, 0) / 20;
-      const currentPrice = priceHistory[priceHistory.length - 1];
+      // Get real market data from Pocket Option via DOM scraping
+      const marketData = await getMarketData(pair.symbol);
+      const { currentPrice, priceHistory, rsi, ema50, ema200 } = marketData;
 
       // AI Analysis
       const completion = await openai.chat.completions.create({
@@ -176,7 +173,7 @@ export async function registerRoutes(
     }
   });
 
-  // Update signal price (for live tracking)
+  // Update signal price (for live tracking from Pocket Option)
   app.patch("/api/signals/:id/price", async (req, res) => {
     try {
       const signalId = Number(req.params.id);
@@ -186,9 +183,23 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Signal not found" });
       }
 
-      // Simulate price movement
-      const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
-      const newPrice = currentPrice + (Math.random() - 0.5) * 0.0005;
+      // Get real price from Pocket Option
+      const pair = await storage.getPair(signal.pairId);
+      let newPrice: number;
+      
+      if (pair) {
+        const realPrice = await getCurrentPrice(pair.symbol);
+        if (realPrice) {
+          newPrice = realPrice;
+        } else {
+          // Fallback to simulated price if scraping fails
+          const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
+          newPrice = currentPrice + (Math.random() - 0.5) * 0.0005;
+        }
+      } else {
+        const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
+        newPrice = currentPrice + (Math.random() - 0.5) * 0.0005;
+      }
       
       const updated = await storage.updateSignalPrice(signalId, newPrice.toFixed(5));
       res.json(updated);
