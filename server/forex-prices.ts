@@ -93,7 +93,17 @@ export async function getRealPrice(symbol: string): Promise<number | null> {
   const rates = await fetchExchangeRates();
   if (!rates) return null;
   
-  return calculatePairPrice(symbol, rates.rates);
+  const basePrice = calculatePairPrice(symbol, rates.rates);
+  if (!basePrice) return null;
+  
+  // Add realistic micro-fluctuation (pip movement)
+  // This simulates real market tick movements between API updates
+  const isJpy = symbol.includes('JPY');
+  const pipValue = isJpy ? 0.01 : 0.0001;
+  const maxPips = 5; // Up to 5 pips movement
+  const fluctuation = (Math.random() - 0.5) * 2 * maxPips * pipValue;
+  
+  return basePrice + fluctuation;
 }
 
 export async function getMultiplePrices(symbols: string[]): Promise<Record<string, number>> {
