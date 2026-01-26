@@ -127,8 +127,17 @@ export default function Dashboard() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="1">1 хвилина</SelectItem>
+                    <SelectItem value="2">2 хвилини</SelectItem>
                     <SelectItem value="3">3 хвилини</SelectItem>
+                    <SelectItem value="4">4 хвилини</SelectItem>
                     <SelectItem value="5">5 хвилин</SelectItem>
+                    <SelectItem value="10">10 хвилин</SelectItem>
+                    <SelectItem value="15">15 хвилин</SelectItem>
+                    <SelectItem value="30">30 хвилин</SelectItem>
+                    <SelectItem value="60">1 година</SelectItem>
+                    <SelectItem value="120">2 години</SelectItem>
+                    <SelectItem value="180">3 години</SelectItem>
+                    <SelectItem value="240">4 години</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

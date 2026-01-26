@@ -1,6 +1,6 @@
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, History, Shield, TrendingUp } from "lucide-react";
+import { LayoutDashboard, History, TrendingUp } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -12,7 +12,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <SidebarContent>
             <div className="p-4 flex items-center gap-2">
               <TrendingUp className="h-6 w-6 text-green-500" />
-              <h1 className="text-xl font-bold tracking-tight">OTC Signals</h1>
+              <h1 className="text-xl font-bold tracking-tight">Forex Signals</h1>
             </div>
             <SidebarGroup>
               <SidebarGroupLabel>Menu</SidebarGroupLabel>
@@ -31,14 +31,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <Link href="/history">
                         <History />
                         <span>History</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={location === "/admin"}>
-                      <Link href="/admin">
-                        <Shield />
-                        <span>Admin Panel</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

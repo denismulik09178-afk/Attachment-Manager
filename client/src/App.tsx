@@ -7,7 +7,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import HistoryPage from "@/pages/history";
-import AdminPage from "@/pages/admin";
 import { Layout } from "@/components/layout";
 
 function Router() {
@@ -18,9 +17,6 @@ function Router() {
       </Route>
       <Route path="/history">
         <Layout><HistoryPage /></Layout>
-      </Route>
-      <Route path="/admin">
-        <Layout><AdminPage /></Layout>
       </Route>
       <Route component={NotFound} />
     </Switch>
