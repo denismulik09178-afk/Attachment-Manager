@@ -1,86 +1,85 @@
-const FOREX_API_URL = 'https://www.freeforexapi.com/api/live';
+const EXCHANGE_API_URL = 'https://api.exchangerate-api.com/v4/latest/USD';
 
-interface ForexRate {
-  rate: number;
-  timestamp: number;
+interface ExchangeRates {
+  rates: Record<string, number>;
+  time_last_updated: number;
 }
 
-interface ForexApiResponse {
-  rates: Record<string, ForexRate>;
-  code: number;
-}
+let cachedRates: ExchangeRates | null = null;
+let lastFetchTime = 0;
+const CACHE_TTL = 60000; // 1 minute cache
 
-const priceCache: Map<string, { price: number; timestamp: number }> = new Map();
-const CACHE_TTL = 5000;
-
-function formatPairForApi(symbol: string): string {
-  return symbol.replace('/', '');
-}
-
-export async function getRealPrice(symbol: string): Promise<number | null> {
-  const pairCode = formatPairForApi(symbol);
+async function fetchExchangeRates(): Promise<ExchangeRates | null> {
+  const now = Date.now();
   
-  const cached = priceCache.get(pairCode);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.price;
+  if (cachedRates && now - lastFetchTime < CACHE_TTL) {
+    return cachedRates;
   }
 
   try {
-    const response = await fetch(`${FOREX_API_URL}?pairs=${pairCode}`);
-    
+    const response = await fetch(EXCHANGE_API_URL);
     if (!response.ok) {
-      console.error(`Forex API error: ${response.status}`);
-      return null;
+      console.error(`Exchange API error: ${response.status}`);
+      return cachedRates;
     }
 
-    const data: ForexApiResponse = await response.json();
-    
-    if (data.code === 200 && data.rates && data.rates[pairCode]) {
-      const price = data.rates[pairCode].rate;
-      priceCache.set(pairCode, { price, timestamp: Date.now() });
-      return price;
-    }
-    
-    return null;
+    const data = await response.json();
+    cachedRates = data;
+    lastFetchTime = now;
+    return data;
   } catch (error) {
-    console.error(`Failed to fetch price for ${symbol}:`, error);
-    return null;
+    console.error('Failed to fetch exchange rates:', error);
+    return cachedRates;
   }
 }
 
+function calculatePairPrice(symbol: string, rates: Record<string, number>): number | null {
+  const [base, quote] = symbol.split('/');
+  
+  if (!base || !quote) return null;
+  
+  const baseRate = base === 'USD' ? 1 : rates[base];
+  const quoteRate = quote === 'USD' ? 1 : rates[quote];
+  
+  if (!baseRate || !quoteRate) return null;
+  
+  // For pairs like EUR/USD: 1 EUR = X USD, so we need USD/EUR inverted
+  // rate[EUR] = 0.845 means 1 USD = 0.845 EUR, so EUR/USD = 1/0.845
+  if (quote === 'USD') {
+    return 1 / baseRate;
+  }
+  
+  // For pairs like USD/JPY: 1 USD = X JPY
+  if (base === 'USD') {
+    return quoteRate;
+  }
+  
+  // For cross pairs like EUR/JPY: EUR/USD * USD/JPY
+  const baseToUsd = 1 / baseRate;
+  const usdToQuote = quoteRate;
+  return baseToUsd * usdToQuote;
+}
+
+export async function getRealPrice(symbol: string): Promise<number | null> {
+  const rates = await fetchExchangeRates();
+  if (!rates) return null;
+  
+  return calculatePairPrice(symbol, rates.rates);
+}
+
 export async function getMultiplePrices(symbols: string[]): Promise<Record<string, number>> {
-  const pairCodes = symbols.map(formatPairForApi);
+  const rates = await fetchExchangeRates();
   const result: Record<string, number> = {};
-
-  const uncached: string[] = [];
-  for (const code of pairCodes) {
-    const cached = priceCache.get(code);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-      result[code] = cached.price;
-    } else {
-      uncached.push(code);
+  
+  if (!rates) return result;
+  
+  for (const symbol of symbols) {
+    const price = calculatePairPrice(symbol, rates.rates);
+    if (price) {
+      result[symbol.replace('/', '')] = price;
     }
   }
-
-  if (uncached.length > 0) {
-    try {
-      const response = await fetch(`${FOREX_API_URL}?pairs=${uncached.join(',')}`);
-      
-      if (response.ok) {
-        const data: ForexApiResponse = await response.json();
-        
-        if (data.code === 200 && data.rates) {
-          for (const [code, rateData] of Object.entries(data.rates)) {
-            result[code] = rateData.rate;
-            priceCache.set(code, { price: rateData.rate, timestamp: Date.now() });
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Failed to fetch multiple prices:', error);
-    }
-  }
-
+  
   return result;
 }
 
@@ -154,16 +153,18 @@ export async function generateAccurateMarketData(symbol: string): Promise<{
   const realPrice = await getRealPrice(symbol);
   const basePrice = realPrice || getFallbackPrice(symbol);
   
-  const volatility = symbol.includes('JPY') ? 0.1 : 0.0005;
+  // Generate realistic price history around the real price
+  const volatility = symbol.includes('JPY') ? 0.05 : 0.0003;
   const priceHistory: number[] = [];
   
-  let price = basePrice * (1 - volatility * 10);
+  let price = basePrice * (1 - volatility * 5);
   for (let i = 0; i < 50; i++) {
-    const trend = Math.random() > 0.45 ? 1 : -1;
+    const trend = Math.random() > 0.48 ? 1 : -1;
     const change = Math.random() * volatility * trend;
     price = price + change;
     priceHistory.push(price);
   }
+  // Last price is the real current price
   priceHistory[priceHistory.length - 1] = basePrice;
 
   const indicators = calculateTechnicalIndicators(priceHistory);
