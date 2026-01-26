@@ -6,6 +6,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
 import { generateAccurateMarketData, getRealPrice } from "./forex-prices";
+import { getTradingViewAnalysis } from "./tradingview-analysis";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -97,7 +98,7 @@ export async function registerRoutes(
     }
   });
 
-  // AI Signal Generation
+  // AI Signal Generation with TradingView Real Data
   app.post("/api/signals/generate", async (req, res) => {
     try {
       const { pairId, timeframe } = req.body;
@@ -107,9 +108,44 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pair not found" });
       }
 
+      // Get TradingView real analysis first
+      const tvAnalysis = await getTradingViewAnalysis(pair.symbol, timeframe);
+      
       // Get real market data with accurate indicators
       const marketData = await generateAccurateMarketData(pair.symbol);
       const { currentPrice, priceHistory, indicators } = marketData;
+
+      // If TradingView gives a clear signal, use it directly
+      if (tvAnalysis.recommendation && tvAnalysis.confidence >= 65) {
+        const sparkline = priceHistory.slice(-6);
+        
+        const signal = await storage.createSignal({
+          pairId,
+          direction: tvAnalysis.recommendation,
+          timeframe,
+          openPrice: currentPrice.toFixed(5),
+          sparklineData: sparkline,
+          analysis: tvAnalysis.summary,
+          currentPrice: currentPrice.toFixed(5),
+        });
+
+        const enrichedSignal = {
+          ...signal,
+          pair,
+          confidence: tvAnalysis.confidence,
+        };
+
+        return res.status(201).json(enrichedSignal);
+      }
+      
+      // If TradingView is neutral, report no entry
+      if (!tvAnalysis.recommendation) {
+        return res.status(200).json({
+          noEntry: true,
+          analysis: tvAnalysis.summary || "TradingView аналіз: ринок в нейтральній зоні. Чіткий напрямок не визначений.",
+          pair,
+        });
+      }
 
       // Advanced AI Analysis with comprehensive technical data
       const completion = await openai.chat.completions.create({

@@ -7,10 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect } from "react";
-import { Zap, TrendingUp, Clock, BarChart3, Brain, Sparkles, AlertTriangle, ChevronDown, Activity } from "lucide-react";
+import { Zap, TrendingUp, Clock, BarChart3, Brain, Sparkles, AlertTriangle, ChevronDown } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
-import { TradingViewAnalysis } from "@/components/tradingview-analysis";
 
 export default function Dashboard() {
   const { data: signals, isLoading, refetch } = useSignals({ status: 'active' });
@@ -334,35 +333,6 @@ export default function Dashboard() {
         </Card>
       </motion.div>
 
-      {/* TradingView Technical Analysis */}
-      {selectedPair && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <Card className="border-2 border-blue-500/20">
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <Activity className="text-blue-500" size={24} />
-                TradingView Аналіз - {enabledPairs.find((p: any) => String(p.id) === selectedPair)?.symbol}
-                <span className="text-xs bg-green-500 text-white px-2 py-1 rounded-full ml-2">РЕАЛЬНІ ДАНІ</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">
-                Реальний технічний аналіз від TradingView. Дивіться на "Summary" - Strong Buy, Buy, Neutral, Sell, Strong Sell.
-              </p>
-              <div className="rounded-lg overflow-hidden border border-border">
-                <TradingViewAnalysis 
-                  symbol={enabledPairs.find((p: any) => String(p.id) === selectedPair)?.symbol || 'EUR/USD'} 
-                  height={450}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
 
       <div className="flex items-center justify-between">
         <motion.h2 
