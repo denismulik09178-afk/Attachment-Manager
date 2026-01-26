@@ -153,17 +153,37 @@ export async function generateAccurateMarketData(symbol: string): Promise<{
   const realPrice = await getRealPrice(symbol);
   const basePrice = realPrice || getFallbackPrice(symbol);
   
-  // Generate realistic price history around the real price
-  const volatility = symbol.includes('JPY') ? 0.05 : 0.0003;
+  // Generate BALANCED price history - sometimes up trend, sometimes down trend
+  const volatility = symbol.includes('JPY') ? 0.03 : 0.00015;
   const priceHistory: number[] = [];
   
-  let price = basePrice * (1 - volatility * 5);
+  // Randomly decide market condition for this moment
+  const marketCondition = Math.random();
+  let trendBias: number;
+  let startOffset: number;
+  
+  if (marketCondition < 0.33) {
+    // Bullish market - price came from below (RSI will be low-mid, good for UP signals)
+    trendBias = 0.55; // 55% up moves
+    startOffset = 1 + volatility * 15; // Start above, trending down to current
+  } else if (marketCondition < 0.66) {
+    // Bearish market - price came from above (RSI will be high, good for DOWN signals)
+    trendBias = 0.45; // 45% up moves (more down)
+    startOffset = 1 - volatility * 15; // Start below, trending up to current
+  } else {
+    // Neutral/sideways market
+    trendBias = 0.50; // 50/50
+    startOffset = 1;
+  }
+  
+  let price = basePrice * startOffset;
   for (let i = 0; i < 50; i++) {
-    const trend = Math.random() > 0.48 ? 1 : -1;
+    const trend = Math.random() < trendBias ? 1 : -1;
     const change = Math.random() * volatility * trend;
     price = price + change;
     priceHistory.push(price);
   }
+  
   // Last price is the real current price
   priceHistory[priceHistory.length - 1] = basePrice;
 
