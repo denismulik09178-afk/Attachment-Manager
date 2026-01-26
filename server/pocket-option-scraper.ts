@@ -22,7 +22,7 @@ export async function initBrowser(): Promise<boolean> {
     console.log('Initializing Puppeteer browser...');
     
     browser = await puppeteer.launch({
-      executablePath: process.env.CHROMIUM_PATH || '/nix/store/chromium/bin/chromium',
+      executablePath: process.env.CHROMIUM_PATH || '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium',
       headless: true,
       args: [
         '--no-sandbox',
