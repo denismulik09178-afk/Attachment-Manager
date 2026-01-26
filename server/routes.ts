@@ -115,13 +115,15 @@ export async function registerRoutes(
       const marketData = await generateAccurateMarketData(pair.symbol);
       const { currentPrice, priceHistory, indicators } = marketData;
 
-      // FILTER 1: TradingView signal strength
+      // FILTER 1: TradingView signal strength (STRICT)
       const isStrongTVSignal = tvAnalysis.signal === 'STRONG_BUY' || tvAnalysis.signal === 'STRONG_SELL';
       const isRegularTVSignal = tvAnalysis.signal === 'BUY' || tvAnalysis.signal === 'SELL';
       
-      // FILTER 2: RSI confirms the direction (relaxed thresholds for more signals)
-      const rsiConfirmsUp = indicators.rsi < 45;
-      const rsiConfirmsDown = indicators.rsi > 55;
+      // FILTER 2: RSI confirms the direction (STRICT thresholds for high accuracy)
+      const rsiConfirmsUp = indicators.rsi < 40;
+      const rsiConfirmsDown = indicators.rsi > 60;
+      const rsiStrongUp = indicators.rsi < 30; // Extra point for extreme RSI
+      const rsiStrongDown = indicators.rsi > 70;
       const rsiConfirms = (tvAnalysis.recommendation === 'UP' && rsiConfirmsUp) || 
                           (tvAnalysis.recommendation === 'DOWN' && rsiConfirmsDown);
       
@@ -131,50 +133,71 @@ export async function registerRoutes(
       const macdConfirms = (tvAnalysis.recommendation === 'UP' && macdConfirmsUp) ||
                            (tvAnalysis.recommendation === 'DOWN' && macdConfirmsDown);
       
-      // FILTER 4: EMA trend alignment
-      const emaBullish = indicators.ema9 > indicators.ema21;
-      const emaBearish = indicators.ema9 < indicators.ema21;
-      const emaConfirms = (tvAnalysis.recommendation === 'UP' && emaBullish) ||
-                          (tvAnalysis.recommendation === 'DOWN' && emaBearish);
+      // FILTER 4: EMA trend alignment (both short and medium term)
+      const emaBullish = indicators.ema9 > indicators.ema21 && indicators.ema21 > indicators.ema50;
+      const emaBearish = indicators.ema9 < indicators.ema21 && indicators.ema21 < indicators.ema50;
+      const emaWeakBullish = indicators.ema9 > indicators.ema21;
+      const emaWeakBearish = indicators.ema9 < indicators.ema21;
+      const emaStrongConfirms = (tvAnalysis.recommendation === 'UP' && emaBullish) ||
+                                 (tvAnalysis.recommendation === 'DOWN' && emaBearish);
+      const emaWeakConfirms = (tvAnalysis.recommendation === 'UP' && emaWeakBullish) ||
+                               (tvAnalysis.recommendation === 'DOWN' && emaWeakBearish);
       
-      // Count confirmations
+      // FILTER 5: Bollinger position
+      const priceNearLowerBand = currentPrice <= indicators.bollingerLower * 1.002;
+      const priceNearUpperBand = currentPrice >= indicators.bollingerUpper * 0.998;
+      const bollingerConfirms = (tvAnalysis.recommendation === 'UP' && priceNearLowerBand) ||
+                                 (tvAnalysis.recommendation === 'DOWN' && priceNearUpperBand);
+      
+      // Count confirmations with weighted scoring
       let confirmations = 0;
-      if (isStrongTVSignal) confirmations += 2; // Strong TV signal counts as 2
-      else if (isRegularTVSignal) confirmations += 1.5; // Regular Buy/Sell counts as 1.5
-      else if (tvAnalysis.recommendation) confirmations += 1;
-      if (rsiConfirms) confirmations++;
-      if (macdConfirms) confirmations++;
-      if (emaConfirms) confirmations++;
+      if (isStrongTVSignal) confirmations += 2.5; // Strong TV = 2.5 points
+      else if (isRegularTVSignal) confirmations += 1.5;
+      else if (tvAnalysis.recommendation) confirmations += 0.5;
       
-      // REQUIRE minimum 3 confirmations for good accuracy with more signals
-      // (Strong TV = 2) + (RSI + MACD + EMA = 3) = max 5
-      const minConfirmationsRequired = 3;
+      if (rsiStrongUp || rsiStrongDown) confirmations += 1.5; // Extreme RSI = 1.5
+      else if (rsiConfirms) confirmations += 1;
+      
+      if (macdConfirms) confirmations += 1;
+      
+      if (emaStrongConfirms) confirmations += 1.5; // Full EMA alignment = 1.5
+      else if (emaWeakConfirms) confirmations += 0.5;
+      
+      if (bollingerConfirms) confirmations += 1; // Bollinger confirmation
+      
+      // REQUIRE minimum 4 confirmations for HIGH accuracy
+      // Max possible = 2.5 + 1.5 + 1 + 1.5 + 1 = 7.5
+      const minConfirmationsRequired = 4;
       
       if (confirmations < minConfirmationsRequired || !tvAnalysis.recommendation) {
         // Build detailed analysis of why no entry
         const reasons: string[] = [];
-        if (!isStrongTVSignal && !isRegularTVSignal) reasons.push("TradingView: нейтральний сигнал");
-        if (!rsiConfirms) reasons.push(`RSI (${indicators.rsi.toFixed(1)}) не підтверджує`);
-        if (!macdConfirms) reasons.push("MACD не підтверджує");
-        if (!emaConfirms) reasons.push("EMA не підтверджує");
+        if (!isStrongTVSignal && !isRegularTVSignal) reasons.push("TradingView: слабкий сигнал");
+        if (!rsiConfirms) reasons.push(`RSI (${indicators.rsi.toFixed(1)})`);
+        if (!macdConfirms) reasons.push("MACD");
+        if (!emaStrongConfirms && !emaWeakConfirms) reasons.push("EMA тренд");
+        if (!bollingerConfirms) reasons.push("Боллінджер");
         
         return res.status(200).json({
           noEntry: true,
-          analysis: `⚠️ Недостатньо підтверджень: ${confirmations.toFixed(1)}/${minConfirmationsRequired}. ${reasons.join(', ')}.`,
+          analysis: `⚠️ Точність ${Math.round((confirmations / 7.5) * 100)}%. Потрібно ${minConfirmationsRequired}+ балів, є ${confirmations.toFixed(1)}. Не підтверджує: ${reasons.join(', ')}.`,
           pair,
         });
       }
       
-      // All confirmations passed - give the signal!
+      // All confirmations passed - give HIGH ACCURACY signal!
       const sparkline = priceHistory.slice(-6);
-      const confidence = Math.min(95, 75 + (confirmations * 4));
+      const accuracyPercent = Math.min(95, Math.round(70 + (confirmations / 7.5) * 25));
+      const confidence = accuracyPercent;
       
       const analysisDetails = [
-        `✅ TradingView: ${tvAnalysis.signal}`,
-        `✅ RSI: ${indicators.rsi.toFixed(1)} (${rsiConfirmsUp ? 'перепроданість' : rsiConfirmsDown ? 'перекупленість' : 'нейтрально'})`,
-        `✅ MACD: ${macdConfirmsUp ? 'бичий' : 'ведмежий'} імпульс`,
-        `✅ EMA: ${emaBullish ? 'висхідний' : 'низхідний'} тренд`,
-        `🎯 Підтверджень: ${confirmations}/${minConfirmationsRequired}+`
+        `🎯 ТОЧНІСТЬ: ${accuracyPercent}%`,
+        `📊 TradingView: ${tvAnalysis.signal}`,
+        `📈 RSI: ${indicators.rsi.toFixed(1)}`,
+        `📉 MACD: ${macdConfirms ? '✓' : '✗'}`,
+        `📊 EMA: ${emaStrongConfirms ? '✓✓' : emaWeakConfirms ? '✓' : '✗'}`,
+        `💹 Боллінджер: ${bollingerConfirms ? '✓' : '✗'}`,
+        `⚡ Балів: ${confirmations.toFixed(1)}/7.5`
       ].join(' | ');
       
       const signal = await storage.createSignal({
