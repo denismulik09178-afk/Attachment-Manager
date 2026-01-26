@@ -20,8 +20,8 @@ export interface IStorage {
   // Signals
   createSignal(signal: any): Promise<Signal>;
   getSignal(id: number): Promise<Signal | undefined>;
-  getActiveSignals(): Promise<Signal[]>;
-  getSignalHistory(limit?: number): Promise<Signal[]>;
+  getActiveSignals(userId?: number): Promise<Signal[]>;
+  getSignalHistory(userId?: number, limit?: number): Promise<Signal[]>;
   getSignalStats(): Promise<{
     total: number;
     wins: number;
@@ -87,11 +87,22 @@ export class DatabaseStorage implements IStorage {
     return signal;
   }
 
-  async getActiveSignals(): Promise<Signal[]> {
+  async getActiveSignals(userId?: number): Promise<Signal[]> {
+    if (userId) {
+      return await db.select().from(signals)
+        .where(and(eq(signals.status, 'active'), eq(signals.userId, userId)))
+        .orderBy(desc(signals.openTime));
+    }
     return await db.select().from(signals).where(eq(signals.status, 'active')).orderBy(desc(signals.openTime));
   }
 
-  async getSignalHistory(limit = 50): Promise<Signal[]> {
+  async getSignalHistory(userId?: number, limit = 50): Promise<Signal[]> {
+    if (userId) {
+      return await db.select().from(signals)
+        .where(and(eq(signals.status, 'closed'), eq(signals.userId, userId)))
+        .orderBy(desc(signals.closeTime))
+        .limit(limit);
+    }
     return await db.select().from(signals)
       .where(eq(signals.status, 'closed'))
       .orderBy(desc(signals.closeTime))

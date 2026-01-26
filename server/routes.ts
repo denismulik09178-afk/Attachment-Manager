@@ -37,11 +37,16 @@ export async function registerRoutes(
   // --- Signals ---
   app.get(api.signals.list.path, async (req, res) => {
     const status = req.query.status as string;
+    
+    // Get current user ID for filtering (each user sees only their signals)
+    const user = req.user as any;
+    const userId = user?.claims?.sub ? await getUserIdFromSub(user.claims.sub) : undefined;
+    
     let result;
     if (status === 'active') {
-      result = await storage.getActiveSignals();
+      result = await storage.getActiveSignals(userId);
     } else {
-      result = await storage.getSignalHistory(Number(req.query.limit) || 50);
+      result = await storage.getSignalHistory(userId, Number(req.query.limit) || 50);
     }
 
     // Enrich with pair data manually for now since we didn't do a join in storage
@@ -56,6 +61,12 @@ export async function registerRoutes(
 
     res.json(enriched);
   });
+  
+  // Helper to get numeric user ID from Replit Auth sub
+  async function getUserIdFromSub(sub: string): Promise<number | undefined> {
+    const user = await storage.getUserByUsername(sub);
+    return user?.id;
+  }
 
   app.get(api.signals.stats.path, async (req, res) => {
     const stats = await storage.getSignalStats();
@@ -102,6 +113,10 @@ export async function registerRoutes(
   app.post("/api/signals/generate", async (req, res) => {
     try {
       const { pairId, timeframe } = req.body;
+      
+      // Get current user for signal ownership
+      const user = req.user as any;
+      const userId = user?.claims?.sub ? await getUserIdFromSub(user.claims.sub) : undefined;
       
       const pair = await storage.getPair(pairId);
       if (!pair) {
@@ -202,6 +217,7 @@ export async function registerRoutes(
       
       const signal = await storage.createSignal({
         pairId,
+        userId, // Owner of the signal (multi-user isolation)
         direction: tvAnalysis.recommendation,
         timeframe,
         openPrice: currentPrice.toFixed(5),

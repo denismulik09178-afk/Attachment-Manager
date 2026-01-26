@@ -22,6 +22,7 @@ export const pairs = pgTable("pairs", {
 export const signals = pgTable("signals", {
   id: serial("id").primaryKey(),
   pairId: integer("pair_id").references(() => pairs.id).notNull(),
+  userId: integer("user_id").references(() => users.id), // Owner of the signal (null = legacy/shared)
   direction: text("direction").notNull(), // 'UP' or 'DOWN'
   timeframe: integer("timeframe").notNull(), // in minutes: 1, 3, 5
   openPrice: decimal("open_price").notNull(),
