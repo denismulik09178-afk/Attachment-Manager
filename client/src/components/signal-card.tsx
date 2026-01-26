@@ -42,9 +42,10 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
       }
       setShowResult(true);
       
+      // Показуємо результат 8 секунд перед закриттям
       setTimeout(() => {
         onClose?.();
-      }, 3000);
+      }, 8000);
     } catch (e) {
       console.error("Failed to close signal", e);
     }
