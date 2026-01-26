@@ -115,22 +115,23 @@ export async function registerRoutes(
       const marketData = await generateAccurateMarketData(pair.symbol);
       const { currentPrice, priceHistory, indicators } = marketData;
 
-      // STRICT FILTER 1: TradingView must give STRONG signal (Strong Buy/Strong Sell)
+      // FILTER 1: TradingView signal strength
       const isStrongTVSignal = tvAnalysis.signal === 'STRONG_BUY' || tvAnalysis.signal === 'STRONG_SELL';
+      const isRegularTVSignal = tvAnalysis.signal === 'BUY' || tvAnalysis.signal === 'SELL';
       
-      // STRICT FILTER 2: RSI must confirm the direction
-      const rsiConfirmsUp = indicators.rsi < 35;
-      const rsiConfirmsDown = indicators.rsi > 65;
+      // FILTER 2: RSI confirms the direction (relaxed thresholds for more signals)
+      const rsiConfirmsUp = indicators.rsi < 45;
+      const rsiConfirmsDown = indicators.rsi > 55;
       const rsiConfirms = (tvAnalysis.recommendation === 'UP' && rsiConfirmsUp) || 
                           (tvAnalysis.recommendation === 'DOWN' && rsiConfirmsDown);
       
-      // STRICT FILTER 3: MACD must confirm direction
+      // FILTER 3: MACD confirms direction
       const macdConfirmsUp = indicators.macd > indicators.macdSignal;
       const macdConfirmsDown = indicators.macd < indicators.macdSignal;
       const macdConfirms = (tvAnalysis.recommendation === 'UP' && macdConfirmsUp) ||
                            (tvAnalysis.recommendation === 'DOWN' && macdConfirmsDown);
       
-      // STRICT FILTER 4: EMA trend alignment
+      // FILTER 4: EMA trend alignment
       const emaBullish = indicators.ema9 > indicators.ema21;
       const emaBearish = indicators.ema9 < indicators.ema21;
       const emaConfirms = (tvAnalysis.recommendation === 'UP' && emaBullish) ||
@@ -139,26 +140,27 @@ export async function registerRoutes(
       // Count confirmations
       let confirmations = 0;
       if (isStrongTVSignal) confirmations += 2; // Strong TV signal counts as 2
+      else if (isRegularTVSignal) confirmations += 1.5; // Regular Buy/Sell counts as 1.5
       else if (tvAnalysis.recommendation) confirmations += 1;
       if (rsiConfirms) confirmations++;
       if (macdConfirms) confirmations++;
       if (emaConfirms) confirmations++;
       
-      // REQUIRE minimum 4 confirmations for 80%+ accuracy
+      // REQUIRE minimum 3 confirmations for good accuracy with more signals
       // (Strong TV = 2) + (RSI + MACD + EMA = 3) = max 5
-      const minConfirmationsRequired = 4;
+      const minConfirmationsRequired = 3;
       
       if (confirmations < minConfirmationsRequired || !tvAnalysis.recommendation) {
         // Build detailed analysis of why no entry
         const reasons: string[] = [];
-        if (!isStrongTVSignal) reasons.push("TradingView не дає СИЛЬНОГО сигналу");
-        if (!rsiConfirms) reasons.push(`RSI (${indicators.rsi.toFixed(1)}) не підтверджує напрямок`);
-        if (!macdConfirms) reasons.push("MACD не підтверджує напрямок");
-        if (!emaConfirms) reasons.push("EMA тренд не підтверджує");
+        if (!isStrongTVSignal && !isRegularTVSignal) reasons.push("TradingView: нейтральний сигнал");
+        if (!rsiConfirms) reasons.push(`RSI (${indicators.rsi.toFixed(1)}) не підтверджує`);
+        if (!macdConfirms) reasons.push("MACD не підтверджує");
+        if (!emaConfirms) reasons.push("EMA не підтверджує");
         
         return res.status(200).json({
           noEntry: true,
-          analysis: `⚠️ Для 80% точності потрібно мінімум ${minConfirmationsRequired} підтверджень. Зараз: ${confirmations}. Причини: ${reasons.join(', ')}.`,
+          analysis: `⚠️ Недостатньо підтверджень: ${confirmations.toFixed(1)}/${minConfirmationsRequired}. ${reasons.join(', ')}.`,
           pair,
         });
       }
