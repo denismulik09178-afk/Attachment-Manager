@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, Clock, DollarSign, TrendingUp, TrendingDown, Trophy, XCircle } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { ArrowUp, ArrowDown, Clock, DollarSign, Trophy, XCircle } from "lucide-react";
+import { motion } from "framer-motion";
 import { useEffect, useState, useCallback } from "react";
 import { TradingViewWidget } from "./tradingview-widget";
 
@@ -24,10 +24,6 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
 
   const openPrice = parseFloat(signal.openPrice);
   const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
-  const priceDiff = currentPrice - openPrice;
-  
-  // Правильна логіка: UP виграє якщо ціна зросла, DOWN виграє якщо ціна впала
-  const isWinning = signal.direction === 'UP' ? currentPrice > openPrice : currentPrice < openPrice;
 
   const closeSignal = useCallback(async () => {
     try {
@@ -188,62 +184,38 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
         <div className="bg-muted/50 rounded-lg p-3">
           <div className="flex justify-between items-center">
             <span className="text-xs text-muted-foreground">Поточна ціна:</span>
-            <div className="flex items-center gap-2">
-              <motion.span 
-                className="font-mono font-bold text-lg"
-                key={currentPrice}
-                initial={{ scale: 1.2 }}
-                animate={{ scale: 1 }}
-              >
-                {currentPrice.toFixed(5)}
-              </motion.span>
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={isWinning ? 'win' : 'lose'}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                >
-                  {isWinning ? (
-                    <TrendingUp className="text-green-500" size={20} />
-                  ) : (
-                    <TrendingDown className="text-red-500" size={20} />
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </div>
-          <div className="flex justify-between items-center mt-1">
-            <span className="text-xs text-muted-foreground">Різниця:</span>
-            <span className={`font-mono text-sm font-bold ${priceDiff >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {priceDiff >= 0 ? '+' : ''}{priceDiff.toFixed(5)}
-            </span>
+            <motion.span 
+              className="font-mono font-bold text-lg"
+              key={currentPrice}
+              initial={{ scale: 1.2 }}
+              animate={{ scale: 1 }}
+            >
+              {currentPrice.toFixed(5)}
+            </motion.span>
           </div>
         </div>
         
-        <div className="flex items-center justify-center gap-4">
+        <div className="flex items-center justify-center">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: "spring", stiffness: 200, damping: 15 }}
-            className={`inline-flex items-center justify-center w-14 h-14 rounded-full border-4 ${isWinning ? 'border-green-500 bg-green-500/10' : 'border-red-500 bg-red-500/10'}`}
+            className={`inline-flex items-center justify-center w-16 h-16 rounded-full border-4`}
+            style={{ borderColor: color, backgroundColor: `${color}20` }}
           >
             <motion.div
               animate={{ 
-                y: isUp ? [-2, 2, -2] : [2, -2, 2],
+                y: isUp ? [-3, 3, -3] : [3, -3, 3],
               }}
               transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
             >
               {isUp ? (
-                <ArrowUp size={28} className={isWinning ? 'text-green-500' : 'text-red-500'} />
+                <ArrowUp size={32} style={{ color }} />
               ) : (
-                <ArrowDown size={28} className={isWinning ? 'text-green-500' : 'text-red-500'} />
+                <ArrowDown size={32} style={{ color }} />
               )}
             </motion.div>
           </motion.div>
-          <p className={`text-lg font-bold ${isWinning ? 'text-green-500' : 'text-red-500'}`}>
-            {isWinning ? 'В ПЛЮСІ' : 'В МІНУСІ'}
-          </p>
         </div>
 
         <div className="rounded-lg overflow-hidden border border-border">

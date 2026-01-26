@@ -4,9 +4,10 @@ import { SignalCard } from "@/components/signal-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect } from "react";
-import { Zap, TrendingUp, Clock, BarChart3, Brain, Sparkles, AlertTriangle } from "lucide-react";
+import { Zap, TrendingUp, Clock, BarChart3, Brain, Sparkles, AlertTriangle, ChevronDown } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 
@@ -20,6 +21,8 @@ export default function Dashboard() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [analysisText, setAnalysisText] = useState("");
   const [noEntryMessage, setNoEntryMessage] = useState("");
+  const [pairOpen, setPairOpen] = useState(false);
+  const [timeframeOpen, setTimeframeOpen] = useState(false);
 
   // Poll for price updates every 5 seconds
   useEffect(() => {
@@ -118,74 +121,119 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Валютні пари */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <BarChart3 size={16} className="text-purple-500" />
-                Валютна пара
-              </label>
-              <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10 gap-2">
-                {enabledPairs.map((pair: any) => (
-                  <motion.button
-                    key={pair.id}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setSelectedPair(String(pair.id))}
-                    data-testid={`pair-${pair.symbol}`}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border-2 ${
-                      selectedPair === String(pair.id)
-                        ? 'bg-purple-500 text-white border-purple-500 shadow-lg shadow-purple-500/30'
-                        : 'bg-muted/50 hover:bg-muted border-transparent hover:border-purple-500/30'
-                    }`}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Валютна пара - Popover */}
+              <Popover open={pairOpen} onOpenChange={setPairOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full h-14 justify-between text-left font-normal border-2 hover:border-purple-500"
+                    data-testid="select-pair-trigger"
                   >
-                    {pair.symbol.replace('/', '')}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-            
-            {/* Експірація */}
-            <div className="space-y-3">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <Clock size={16} className="text-blue-500" />
-                Експірація
-              </label>
-              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-12 gap-2">
-                {timeframes.map((tf) => (
-                  <motion.button
-                    key={tf.value}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setSelectedTimeframe(tf.value)}
-                    data-testid={`timeframe-${tf.value}`}
-                    className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border-2 ${
-                      selectedTimeframe === tf.value
-                        ? tf.category === 'scalp' 
-                          ? 'bg-red-500 text-white border-red-500 shadow-lg shadow-red-500/30'
-                          : tf.category === 'short'
-                          ? 'bg-orange-500 text-white border-orange-500 shadow-lg shadow-orange-500/30'
-                          : tf.category === 'mid'
-                          ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/30'
-                          : 'bg-green-500 text-white border-green-500 shadow-lg shadow-green-500/30'
-                        : 'bg-muted/50 hover:bg-muted border-transparent hover:border-blue-500/30'
-                    }`}
+                    <div className="flex items-center gap-3">
+                      <BarChart3 size={20} className="text-purple-500" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Валютна пара</p>
+                        <p className="font-bold text-lg">
+                          {selectedPair ? enabledPairs.find((p: any) => String(p.id) === selectedPair)?.symbol : "Оберіть пару"}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronDown size={20} className="text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-3" align="start">
+                  <div className="grid grid-cols-3 gap-2">
+                    {enabledPairs.map((pair: any) => (
+                      <Button
+                        key={pair.id}
+                        variant={selectedPair === String(pair.id) ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => { setSelectedPair(String(pair.id)); setPairOpen(false); }}
+                        data-testid={`pair-${pair.symbol}`}
+                        className={selectedPair === String(pair.id) ? "bg-purple-500 hover:bg-purple-600" : ""}
+                      >
+                        {pair.symbol}
+                      </Button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              
+              {/* Експірація - Popover */}
+              <Popover open={timeframeOpen} onOpenChange={setTimeframeOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full h-14 justify-between text-left font-normal border-2 hover:border-blue-500"
+                    data-testid="select-timeframe-trigger"
                   >
-                    {tf.label}
-                  </motion.button>
-                ))}
-              </div>
-              <div className="flex gap-4 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"></span> Скальпінг</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span> Короткострок</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span> Середньострок</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> Довгострок</span>
-              </div>
+                    <div className="flex items-center gap-3">
+                      <Clock size={20} className="text-blue-500" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Експірація</p>
+                        <p className="font-bold text-lg">
+                          {timeframes.find(t => t.value === selectedTimeframe)?.label || "1 хв"}
+                        </p>
+                      </div>
+                    </div>
+                    <ChevronDown size={20} className="text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-3" align="start">
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground font-medium">Скальпінг</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {timeframes.filter(t => t.category === 'scalp').map((tf) => (
+                        <Button
+                          key={tf.value}
+                          variant={selectedTimeframe === tf.value ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => { setSelectedTimeframe(tf.value); setTimeframeOpen(false); }}
+                          data-testid={`timeframe-${tf.value}`}
+                          className={selectedTimeframe === tf.value ? "bg-red-500 hover:bg-red-600" : ""}
+                        >
+                          {tf.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground font-medium pt-2">Короткострок</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {timeframes.filter(t => t.category === 'short').map((tf) => (
+                        <Button
+                          key={tf.value}
+                          variant={selectedTimeframe === tf.value ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => { setSelectedTimeframe(tf.value); setTimeframeOpen(false); }}
+                          className={selectedTimeframe === tf.value ? "bg-orange-500 hover:bg-orange-600" : ""}
+                        >
+                          {tf.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground font-medium pt-2">Середньо/Довгострок</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {timeframes.filter(t => t.category === 'mid' || t.category === 'long').map((tf) => (
+                        <Button
+                          key={tf.value}
+                          variant={selectedTimeframe === tf.value ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => { setSelectedTimeframe(tf.value); setTimeframeOpen(false); }}
+                          className={selectedTimeframe === tf.value ? "bg-blue-500 hover:bg-blue-600" : ""}
+                        >
+                          {tf.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
             
             {/* Кнопка отримати сигнал */}
             <Button 
               size="lg" 
-              className="w-full h-12 text-lg relative overflow-visible bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
+              className="w-full h-14 text-lg relative overflow-visible bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
               onClick={handleGetSignal}
               disabled={!selectedPair || isGenerating}
               data-testid="button-get-signal"
@@ -203,7 +251,7 @@ export default function Dashboard() {
                       animate={{ rotate: 360 }}
                       transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
                     >
-                      <Brain size={20} />
+                      <Brain size={22} />
                     </motion.div>
                     AI Аналізує ринок...
                   </motion.div>
@@ -215,7 +263,7 @@ export default function Dashboard() {
                     exit={{ opacity: 0, scale: 0.8 }}
                     className="flex items-center gap-2"
                   >
-                    <Zap size={20} />
+                    <Zap size={22} />
                     Отримати Сигнал
                   </motion.div>
                 )}
