@@ -288,30 +288,30 @@ export async function registerRoutes(
       if (vwapConfirms) confirmations += 0.5;        // VWAP
       if (sarConfirms) confirmations += 0.5;         // Parabolic SAR
       
-      // REQUIRE minimum 21/30 points (70%) for 90%+ accuracy signals
-      const minConfirmationsRequired = 21;
+      // REQUIRE minimum 18/30 points (60%) for 90%+ accuracy signals
+      const minConfirmationsRequired = 18;
       
       // HARD REQUIREMENTS for 90%+ accuracy:
       // - TradingView STRONG
-      // - At least 4/5 oscillators
-      // - EMA AND MACD must confirm
-      // - At least 2 channel indicators
+      // - At least 3/5 oscillators (lowered from 4)
+      // - EMA OR MACD must confirm (lowered from AND)
+      // - At least 1 channel indicator (lowered from 2)
       const oscillatorsConfirmed = [rsiConfirms, stochConfirms, williamsConfirms, cciConfirms, mfiConfirms].filter(Boolean).length;
       const channelsConfirmed = [bollingerConfirms, keltnerConfirms, donchianConfirms, ichimokuConfirms].filter(Boolean).length;
-      const trendConfirmed = emaConfirms && macdConfirms;
-      const hardRequirementsMet = isStrongTVSignal && oscillatorsConfirmed >= 4 && trendConfirmed && channelsConfirmed >= 2;
+      const trendConfirmed = emaConfirms || macdConfirms;
+      const hardRequirementsMet = isStrongTVSignal && oscillatorsConfirmed >= 3 && trendConfirmed && channelsConfirmed >= 1;
       
       if (confirmations < minConfirmationsRequired || !tvAnalysis.recommendation || !hardRequirementsMet) {
         const accuracyNow = Math.round((confirmations / maxPoints) * 100);
         const reasons: string[] = [];
         if (!isStrongTVSignal) reasons.push("TV не STRONG");
-        if (oscillatorsConfirmed < 4) reasons.push(`Осцил: ${oscillatorsConfirmed}/5`);
-        if (!trendConfirmed) reasons.push("EMA+MACD не підтв.");
-        if (channelsConfirmed < 2) reasons.push(`Канали: ${channelsConfirmed}/4`);
+        if (oscillatorsConfirmed < 3) reasons.push(`Осцил: ${oscillatorsConfirmed}/5`);
+        if (!trendConfirmed) reasons.push("EMA/MACD не підтв.");
+        if (channelsConfirmed < 1) reasons.push(`Канали: ${channelsConfirmed}/4`);
         
         return res.status(200).json({
           noEntry: true,
-          analysis: `🔴 ТОЧНІСТЬ ${accuracyNow}% (потрібно 70%+). Балів: ${confirmations.toFixed(1)}/${maxPoints}. ❌ ${reasons.join(' | ')} | RSI:${indicators.rsi.toFixed(0)} Stoch:${indicators.stochK.toFixed(0)} W%R:${indicators.williamsR.toFixed(0)}`,
+          analysis: `🔴 ${accuracyNow}% (потрібно 60%+). Балів: ${confirmations.toFixed(1)}/${maxPoints}. ${reasons.join(' | ')} | RSI:${indicators.rsi.toFixed(0)} Stoch:${indicators.stochK.toFixed(0)}`,
           pair,
         });
       }
