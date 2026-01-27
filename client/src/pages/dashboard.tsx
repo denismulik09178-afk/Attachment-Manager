@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState, useEffect } from "react";
-import { Zap, TrendingUp, Clock, BarChart3, Brain, Sparkles, AlertTriangle, ChevronDown } from "lucide-react";
+import { Zap, TrendingUp, BarChart3, Brain, Sparkles, AlertTriangle, ChevronDown } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { getSessionId } from "@/lib/session";
@@ -18,12 +18,10 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   
   const [selectedPair, setSelectedPair] = useState<string>("");
-  const [selectedTimeframe, setSelectedTimeframe] = useState<string>("1");
   const [isGenerating, setIsGenerating] = useState(false);
   const [analysisText, setAnalysisText] = useState("");
   const [noEntryMessage, setNoEntryMessage] = useState("");
   const [pairOpen, setPairOpen] = useState(false);
-  const [timeframeOpen, setTimeframeOpen] = useState(false);
 
   // Poll for price updates every 5 seconds
   useEffect(() => {
@@ -60,7 +58,6 @@ export default function Dashboard() {
         },
         body: JSON.stringify({
           pairId: Number(selectedPair),
-          timeframe: Number(selectedTimeframe),
         }),
         credentials: 'include',
       });
@@ -92,20 +89,6 @@ export default function Dashboard() {
     generateSignal.mutate();
   };
   
-  const timeframes = [
-    { value: "1", label: "1 хв", category: "scalp" },
-    { value: "2", label: "2 хв", category: "scalp" },
-    { value: "3", label: "3 хв", category: "scalp" },
-    { value: "4", label: "4 хв", category: "scalp" },
-    { value: "5", label: "5 хв", category: "short" },
-    { value: "10", label: "10 хв", category: "short" },
-    { value: "15", label: "15 хв", category: "mid" },
-    { value: "30", label: "30 хв", category: "mid" },
-    { value: "60", label: "1 год", category: "long" },
-    { value: "120", label: "2 год", category: "long" },
-    { value: "180", label: "3 год", category: "long" },
-    { value: "240", label: "4 год", category: "long" },
-  ];
 
   const enabledPairs = pairs?.filter((p: any) => p.isEnabled) || [];
 
@@ -125,7 +108,7 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex flex-col gap-4">
               {/* Валютна пара - Popover */}
               <Popover open={pairOpen} onOpenChange={setPairOpen}>
                 <PopoverTrigger asChild>
@@ -164,74 +147,6 @@ export default function Dashboard() {
                 </PopoverContent>
               </Popover>
               
-              {/* Експірація - Popover */}
-              <Popover open={timeframeOpen} onOpenChange={setTimeframeOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full h-14 justify-between text-left font-normal border-2 hover:border-blue-500"
-                    data-testid="select-timeframe-trigger"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Clock size={20} className="text-blue-500" />
-                      <div>
-                        <p className="text-xs text-muted-foreground">Експірація</p>
-                        <p className="font-bold text-lg">
-                          {timeframes.find(t => t.value === selectedTimeframe)?.label || "1 хв"}
-                        </p>
-                      </div>
-                    </div>
-                    <ChevronDown size={20} className="text-muted-foreground" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-72 p-3" align="start">
-                  <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground font-medium">Скальпінг</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {timeframes.filter(t => t.category === 'scalp').map((tf) => (
-                        <Button
-                          key={tf.value}
-                          variant={selectedTimeframe === tf.value ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => { setSelectedTimeframe(tf.value); setTimeframeOpen(false); }}
-                          data-testid={`timeframe-${tf.value}`}
-                          className={selectedTimeframe === tf.value ? "bg-red-500 hover:bg-red-600" : ""}
-                        >
-                          {tf.label}
-                        </Button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground font-medium pt-2">Короткострок</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {timeframes.filter(t => t.category === 'short').map((tf) => (
-                        <Button
-                          key={tf.value}
-                          variant={selectedTimeframe === tf.value ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => { setSelectedTimeframe(tf.value); setTimeframeOpen(false); }}
-                          className={selectedTimeframe === tf.value ? "bg-orange-500 hover:bg-orange-600" : ""}
-                        >
-                          {tf.label}
-                        </Button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground font-medium pt-2">Середньо/Довгострок</p>
-                    <div className="grid grid-cols-4 gap-2">
-                      {timeframes.filter(t => t.category === 'mid' || t.category === 'long').map((tf) => (
-                        <Button
-                          key={tf.value}
-                          variant={selectedTimeframe === tf.value ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => { setSelectedTimeframe(tf.value); setTimeframeOpen(false); }}
-                          className={selectedTimeframe === tf.value ? "bg-blue-500 hover:bg-blue-600" : ""}
-                        >
-                          {tf.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
             </div>
             
             {/* Кнопка отримати сигнал */}

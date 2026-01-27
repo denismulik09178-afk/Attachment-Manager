@@ -17,6 +17,15 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
     ? "from-green-500/10 to-green-500/5" 
     : "from-red-500/10 to-red-500/5";
   
+  // Форматуємо таймфрейм для відображення
+  const formatTimeframe = (mins: number) => {
+    if (mins >= 60) {
+      const hours = mins / 60;
+      return hours === 1 ? '1 годину' : `${hours} години`;
+    }
+    return `${mins} хв`;
+  };
+  
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [progress, setProgress] = useState<number>(100);
   const [showResult, setShowResult] = useState(false);
@@ -147,96 +156,72 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
       className={`overflow-hidden border-l-4 bg-gradient-to-br ${bgGradient}`}
       style={{ borderLeftColor: color }}
     >
-      <CardHeader className="flex flex-row items-center justify-between pb-2 gap-2">
-        <CardTitle className="text-lg font-bold truncate">
-          {signal.pair?.symbol || "Unknown Pair"}
-        </CardTitle>
-        <Badge 
-          className="gap-1 text-white shrink-0"
-          style={{ backgroundColor: color }}
-        >
-          {isUp ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-          {signal.direction}
-        </Badge>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <DollarSign size={12} /> Точка входу
-            </p>
-            <p className="text-xl font-mono font-bold">{openPrice.toFixed(5)}</p>
+      <CardHeader className="pb-2">
+        {/* Головний напрямок з таймфреймом */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <motion.div
+              className="flex items-center justify-center w-12 h-12 rounded-full"
+              style={{ backgroundColor: `${color}20`, borderColor: color, borderWidth: 2 }}
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ repeat: Infinity, duration: 2 }}
+            >
+              {isUp ? <ArrowUp size={24} style={{ color }} /> : <ArrowDown size={24} style={{ color }} />}
+            </motion.div>
+            <div>
+              <p className="text-sm text-muted-foreground">{signal.pair?.symbol}</p>
+              <p className="text-xl font-bold" style={{ color }}>
+                {isUp ? 'ВВЕРХ' : 'ВНИЗ'} на {formatTimeframe(signal.timeframe)}
+              </p>
+            </div>
           </div>
+          
+          {/* Таймер збоку */}
           <div className="text-right">
-            <p className="text-xs text-muted-foreground flex items-center justify-end gap-1">
-              <Clock size={12} /> Експірація
-            </p>
-            <motion.p 
-              className="text-xl font-mono font-bold"
-              style={{ color }}
+            <motion.div
+              className="text-2xl font-mono font-bold"
+              style={{ color: timeLeft <= 10 ? '#ef4444' : color }}
               animate={{ scale: timeLeft <= 10 ? [1, 1.1, 1] : 1 }}
               transition={{ repeat: timeLeft <= 10 ? Infinity : 0, duration: 0.5 }}
             >
               {formatTime(timeLeft)}
+            </motion.div>
+            <p className="text-xs text-muted-foreground">залишилось</p>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex justify-between items-center bg-muted/30 rounded-lg p-3">
+          <div>
+            <p className="text-xs text-muted-foreground">Вхід</p>
+            <p className="text-lg font-mono font-bold">{openPrice.toFixed(5)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Поточна</p>
+            <motion.p 
+              className="text-lg font-mono font-bold"
+              key={currentPrice}
+              initial={{ scale: 1.1 }}
+              animate={{ scale: 1 }}
+            >
+              {currentPrice.toFixed(5)}
             </motion.p>
           </div>
         </div>
 
-        <div className="bg-muted/50 rounded-lg p-3">
-          <div className="flex justify-between items-center">
-            <span className="text-xs text-muted-foreground">Поточна ціна:</span>
-            <motion.span 
-              className="font-mono font-bold text-lg"
-              key={currentPrice}
-              initial={{ scale: 1.2 }}
-              animate={{ scale: 1 }}
-            >
-              {currentPrice.toFixed(5)}
-            </motion.span>
-          </div>
-        </div>
-        
-        <div className="flex items-center justify-center">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 15 }}
-            className={`inline-flex items-center justify-center w-16 h-16 rounded-full border-4`}
-            style={{ borderColor: color, backgroundColor: `${color}20` }}
-          >
-            <motion.div
-              animate={{ 
-                y: isUp ? [-3, 3, -3] : [3, -3, 3],
-              }}
-              transition={{ repeat: Infinity, duration: 1.5, ease: "easeInOut" }}
-            >
-              {isUp ? (
-                <ArrowUp size={32} style={{ color }} />
-              ) : (
-                <ArrowDown size={32} style={{ color }} />
-              )}
-            </motion.div>
-          </motion.div>
+        {/* Прогрес бар */}
+        <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+          <motion.div 
+            className="h-full rounded-full"
+            style={{ backgroundColor: timeLeft <= 10 ? '#ef4444' : color }}
+            initial={{ width: "100%" }}
+            animate={{ width: `${progress}%` }}
+            transition={{ ease: "linear", duration: 0.1 }}
+          />
         </div>
 
         <div className="rounded-lg overflow-hidden border border-border">
-          <TradingViewWidget symbol={signal.pair?.symbol || 'EUR/USD'} height={250} />
-        </div>
-        
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>Прогрес</span>
-            <span>{signal.timeframe}хв</span>
-          </div>
-          <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-            <motion.div 
-              className="h-full rounded-full"
-              style={{ backgroundColor: timeLeft <= 10 ? '#ef4444' : color }}
-              initial={{ width: "100%" }}
-              animate={{ width: `${progress}%` }}
-              transition={{ ease: "linear", duration: 0.1 }}
-            />
-          </div>
+          <TradingViewWidget symbol={signal.pair?.symbol || 'EUR/USD'} height={220} />
         </div>
 
         {signal.analysis && (
