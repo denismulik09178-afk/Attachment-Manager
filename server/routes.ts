@@ -189,42 +189,51 @@ export async function registerRoutes(
                                  (tvAnalysis.recommendation === 'DOWN' && priceAtUpperBand);
       
       // === INDICATOR 6: Stochastic Oscillator ===
-      // More lenient: <50 for UP, >50 for DOWN
-      const stochForUp = indicators.stochK < 50;
-      const stochForDown = indicators.stochK > 50;
-      const stochConfirms = (tvAnalysis.recommendation === 'UP' && stochForUp) ||
-                            (tvAnalysis.recommendation === 'DOWN' && stochForDown);
+      // Use TradingView's oscillator recommendation - STRICT thresholds
+      const tvRecommendOsc = tvAnalysis.indicators.recommendOsc;
+      const useTvOsc = tvRecommendOsc !== undefined;
+      // Require oscillator to agree with direction (not neutral)
+      const stochConfirms = useTvOsc 
+        ? ((tvAnalysis.recommendation === 'UP' && tvRecommendOsc > 0.05) ||
+           (tvAnalysis.recommendation === 'DOWN' && tvRecommendOsc < -0.05))
+        : ((tvAnalysis.recommendation === 'UP' && indicators.stochK < 40) ||
+           (tvAnalysis.recommendation === 'DOWN' && indicators.stochK > 60));
       
       // === INDICATOR 7: Williams %R ===
-      // More lenient: <-50 for UP, >-50 for DOWN
-      const williamsOversold = indicators.williamsR < -50;
-      const williamsOverbought = indicators.williamsR > -50;
-      const williamsConfirms = (tvAnalysis.recommendation === 'UP' && williamsOversold) ||
-                               (tvAnalysis.recommendation === 'DOWN' && williamsOverbought);
+      // Stricter: oscillator must show clear direction
+      const williamsConfirms = useTvOsc 
+        ? ((tvAnalysis.recommendation === 'UP' && tvRecommendOsc > 0) ||
+           (tvAnalysis.recommendation === 'DOWN' && tvRecommendOsc < 0))
+        : ((tvAnalysis.recommendation === 'UP' && indicators.williamsR < -60) ||
+           (tvAnalysis.recommendation === 'DOWN' && indicators.williamsR > -40));
       
       // === INDICATOR 8: CCI - Commodity Channel Index ===
-      // More lenient: <0 for UP, >0 for DOWN
-      const cciOversold = indicators.cci < 0;
-      const cciOverbought = indicators.cci > 0;
-      const cciConfirms = (tvAnalysis.recommendation === 'UP' && cciOversold) ||
-                          (tvAnalysis.recommendation === 'DOWN' && cciOverbought);
+      // Use TradingView oscillator - must not contradict direction
+      const cciConfirms = useTvOsc 
+        ? ((tvAnalysis.recommendation === 'UP' && tvRecommendOsc >= -0.1) ||
+           (tvAnalysis.recommendation === 'DOWN' && tvRecommendOsc <= 0.1))
+        : ((tvAnalysis.recommendation === 'UP' && indicators.cci < 50) ||
+           (tvAnalysis.recommendation === 'DOWN' && indicators.cci > -50));
       
       // === INDICATOR 9: ADX - Trend Strength ===
       const adxStrong = indicators.adx > 20;
       const adxConfirms = adxStrong;
       
       // === INDICATOR 10: MFI - Money Flow Index ===
-      // More lenient: <50 for UP, >50 for DOWN
-      const mfiOversold = indicators.mfi < 50;
-      const mfiOverbought = indicators.mfi > 50;
-      const mfiConfirms = (tvAnalysis.recommendation === 'UP' && mfiOversold) ||
-                          (tvAnalysis.recommendation === 'DOWN' && mfiOverbought);
+      // Stricter: oscillator must not strongly contradict
+      const mfiConfirms = useTvOsc 
+        ? ((tvAnalysis.recommendation === 'UP' && tvRecommendOsc > -0.05) ||
+           (tvAnalysis.recommendation === 'DOWN' && tvRecommendOsc < 0.05))
+        : ((tvAnalysis.recommendation === 'UP' && indicators.mfi < 45) ||
+           (tvAnalysis.recommendation === 'DOWN' && indicators.mfi > 55));
       
       // === INDICATOR 11: Ultimate Oscillator ===
-      const uoOversold = indicators.uo < 30;
-      const uoOverbought = indicators.uo > 70;
-      const uoConfirms = (tvAnalysis.recommendation === 'UP' && uoOversold) ||
-                         (tvAnalysis.recommendation === 'DOWN' && uoOverbought);
+      // Stricter thresholds for UO
+      const uoConfirms = useTvOsc 
+        ? ((tvAnalysis.recommendation === 'UP' && tvRecommendOsc >= 0) ||
+           (tvAnalysis.recommendation === 'DOWN' && tvRecommendOsc <= 0))
+        : ((tvAnalysis.recommendation === 'UP' && indicators.uo < 35) ||
+           (tvAnalysis.recommendation === 'DOWN' && indicators.uo > 65));
       
       // === INDICATOR 12: ROC - Rate of Change ===
       const rocUp = indicators.roc > 0;

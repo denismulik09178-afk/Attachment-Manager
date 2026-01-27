@@ -408,39 +408,29 @@ export async function generateAccurateMarketData(symbol: string): Promise<{
     priceHistory = [...cache.prices];
     console.log(`[${symbol}] Using REAL price history: ${cache.prices.length} points`);
   } else {
-    // Not enough real data yet - generate balanced simulation
-    const volatility = symbol.includes('JPY') ? 0.02 : 0.0001;
+    // Not enough real data - generate realistic history BASED ON CURRENT PRICE
+    // All prices must be within realistic pip range of basePrice
+    const isJpy = symbol.includes('JPY');
+    const pipValue = isJpy ? 0.01 : 0.0001;
+    const maxPipsRange = 50; // Max 50 pips from current price
+    
     priceHistory = [];
     
-    // Start from a random position (not always below current price)
-    const marketCondition = Math.random();
-    let startPrice: number;
-    let trendBias: number;
-    
-    if (marketCondition < 0.33) {
-      // Price was higher before (downtrend to current = RSI low = UP signal)
-      startPrice = basePrice * (1 + volatility * 20);
-      trendBias = 0.4; // More down moves
-    } else if (marketCondition < 0.66) {
-      // Price was lower before (uptrend to current = RSI high = DOWN signal)
-      startPrice = basePrice * (1 - volatility * 20);
-      trendBias = 0.6; // More up moves
-    } else {
-      // Sideways
-      startPrice = basePrice;
-      trendBias = 0.5;
+    // Generate 50 historical prices centered around current real price
+    for (let i = 0; i < 50; i++) {
+      // Random walk within realistic range
+      const pipsFromCurrent = (Math.random() - 0.5) * 2 * maxPipsRange;
+      const historicalPrice = basePrice + (pipsFromCurrent * pipValue);
+      priceHistory.push(historicalPrice);
     }
     
-    let price = startPrice;
-    for (let i = 0; i < 49; i++) {
-      const trend = Math.random() < trendBias ? 1 : -1;
-      const change = Math.random() * volatility * trend;
-      price = price + change;
-      priceHistory.push(price);
-    }
-    priceHistory.push(basePrice); // Last = current real price
+    // Sort to create realistic price movement pattern
+    // Don't sort - keep random walk for realistic indicators
     
-    console.log(`[${symbol}] Simulated history (condition: ${marketCondition < 0.33 ? 'BEARISH' : marketCondition < 0.66 ? 'BULLISH' : 'NEUTRAL'})`);
+    // Last price is the actual current price
+    priceHistory[priceHistory.length - 1] = basePrice;
+    
+    console.log(`[${symbol}] Generated realistic history around ${basePrice.toFixed(5)}`);
   }
 
   const indicators = calculateTechnicalIndicators(priceHistory);
