@@ -352,7 +352,7 @@ export async function registerRoutes(
       };
       
       // ШІ аналізує ринок і приймає рішення
-      let aiDecision: { direction: 'UP' | 'DOWN' | null; confidence: number; analysis: string } = {
+      let aiDecision: { direction: 'UP' | 'DOWN' | null; confidence: number; analysis: string; recommendedTimeframe?: number } = {
         direction: null,
         confidence: 0,
         analysis: ''
@@ -391,38 +391,46 @@ export async function registerRoutes(
           trend: adxValue > 30 ? 'СИЛЬНИЙ тренд' : adxValue > 20 ? 'помірний тренд' : 'слабкий/бічний'
         };
 
-        const systemPrompt = `Ти — експерт з бінарних опціонів. Твоя задача: прогнозувати рух ціни на КОРОТКІ таймфрейми.
+        const systemPrompt = `Ти — експерт з бінарних опціонів. Твоя задача: прогнозувати рух ціни і РЕКОМЕНДУВАТИ ОПТИМАЛЬНИЙ ТАЙМФРЕЙМ.
 
-⚡ БІНАРНИЙ ОПЦІОН НА ${timeframe} ХВИЛИН:
-- UP = ціна через ${timeframe} хв буде ВИЩЕ поточної
-- DOWN = ціна через ${timeframe} хв буде НИЖЧЕ поточної
+⚡ БІНАРНІ ОПЦІОНИ - ДОСТУПНІ ТАЙМФРЕЙМИ: 1, 3 або 5 хвилин
+- UP = ціна буде ВИЩЕ поточної через X хвилин
+- DOWN = ціна буде НИЖЧЕ поточної через X хвилин
 
-🎯 СТРАТЕГІЯ ДЛЯ ${timeframe}-ХВИЛИННИХ ОПЦІОНІВ:
+🎯 ЯК ОБРАТИ ТАЙМФРЕЙМ:
 
-СИЛЬНІ СИГНАЛИ SHORT (DOWN):
-• RSI > 70 + Stochastic кросовер вниз = 85%+ точність
-• BB > 85% + будь-який ведмежий сигнал = відскок вниз
-• CCI > 150 = екстремальна перекупленість
+📍 1 ХВИЛИНА (швидкий скальпінг):
+• RSI > 75 або < 25 = екстремальний сигнал, швидкий відскок
+• BB > 90% або < 10% = ціна на екстремумі
+• Stochastic кросовер в зоні перекупленості/перепроданості
+• Найкраще для швидких розворотів
 
-СИЛЬНІ СИГНАЛИ LONG (UP):
-• RSI < 30 + Stochastic кросовер вгору = 85%+ точність  
-• BB < 15% + будь-який бичачий сигнал = відскок вгору
-• CCI < -150 = екстремальна перепроданість
+📍 3 ХВИЛИНИ (стандарт):
+• RSI 65-75 або 25-35 = помірний сигнал
+• BB 70-85% або 15-30% = біля межі, але не екстремум
+• ADX > 25 = є тренд, сигнал може потребувати часу
+• Збалансований варіант
 
-УНИКАЙ СИГНАЛІВ КОЛИ:
+📍 5 ХВИЛИН (консервативний):
+• ADX > 30 = сильний тренд, потрібен час
+• Декілька індикаторів співпадають, але немає екстремумів
+• MACD тільки починає розворот
+• Для впевнених, але не екстремальних сигналів
+
+🚫 УНИКАЙ СИГНАЛІВ КОЛИ:
 • RSI 45-55 (нейтральна зона)
 • BB 40-60% (середина каналу)
-• ADX < 15 (немає тренду, хаотичний рух)
-• Індикатори суперечать один одному
+• ADX < 15 (хаотичний рух)
+• Індикатори суперечать
 
 ФОРМАТ ВІДПОВІДІ (тільки JSON):
-{"direction":"UP" або "DOWN" або null,"confidence":75-92,"analysis":"[коротке пояснення українською, 1-2 речення про ключові індикатори]"}`;
+{"direction":"UP" або "DOWN" або null,"timeframe":1 або 3 або 5,"confidence":75-92,"analysis":"[чому цей напрямок і таймфрейм]"}`;
 
-        const userPrompt = `📊 ${pair.symbol} | ⏱️ ЕКСПІРАЦІЯ: ${timeframe} ХВ
+        const userPrompt = `📊 ${pair.symbol} - АНАЛІЗУЙ І ОБЕРИ ТАЙМФРЕЙМ
 
-💰 ЦІНА: ${currentPrice.toFixed(5)}
+💰 ПОТОЧНА ЦІНА: ${currentPrice.toFixed(5)}
 
-📈 АНАЛІЗ ІНДИКАТОРІВ:
+📈 ІНДИКАТОРИ:
 • RSI(14): ${marketData.rsi} → ${signals.rsi}
 • Stochastic: K=${marketData.stochK}, D=${marketData.stochD} → ${signals.stoch}
 • MACD Hist: ${marketData.macdHist} → ${signals.macd}
@@ -431,7 +439,7 @@ export async function registerRoutes(
 • ADX: ${marketData.adx} → ${signals.trend}
 • TradingView: ${marketData.tvRecommend}
 
-🎯 ПРОГНОЗ: Куди піде ціна за ${timeframe} хвилин?`;
+🎯 Визнач напрямок (UP/DOWN) і оптимальний таймфрейм (1/3/5 хв):`;
 
         const aiResponse = await openai.chat.completions.create({
           model: "gpt-4o-mini",
@@ -451,11 +459,15 @@ export async function registerRoutes(
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           if (parsed.direction === 'UP' || parsed.direction === 'DOWN') {
+            // Використовуємо таймфрейм рекомендований ШІ, або заданий користувачем
+            const aiTimeframe = [1, 3, 5].includes(parsed.timeframe) ? parsed.timeframe : timeframe;
             aiDecision = {
               direction: parsed.direction,
               confidence: Math.max(70, Math.min(95, parsed.confidence || 75)),
-              analysis: parsed.analysis || `${parsed.direction === 'UP' ? 'Купівля' : 'Продаж'} ${pair.symbol}`
+              analysis: parsed.analysis || `${parsed.direction === 'UP' ? 'Купівля' : 'Продаж'} ${pair.symbol}`,
+              recommendedTimeframe: aiTimeframe
             };
+            console.log(`[AI TIMEFRAME] ${pair.symbol}: Рекомендовано ${aiTimeframe} хв`);
           }
         }
       } catch (e) {
@@ -473,21 +485,23 @@ export async function registerRoutes(
       
       const direction = aiDecision.direction;
       const dirText = direction === 'UP' ? 'LONG' : 'SHORT';
+      // Використовуємо рекомендований ШІ таймфрейм
+      const finalTimeframe = aiDecision.recommendedTimeframe || timeframe;
       
       // ========== CREATE SIGNAL ==========
       const sparkline = priceHistory.slice(-6);
       const confidence = aiDecision.confidence;
       
-      // AI analysis display
-      const analysisDetails = `${confidence}% ${dirText} | ${pair.symbol}\n${aiDecision.analysis}`;
+      // AI analysis display з таймфреймом
+      const analysisDetails = `${confidence}% ${dirText} | ${pair.symbol} | ${finalTimeframe}хв\n${aiDecision.analysis}`;
       
-      console.log(`[AI SIGNAL] ${pair.symbol}: ${dirText} ${confidence}%`);
+      console.log(`[AI SIGNAL] ${pair.symbol}: ${dirText} ${confidence}% | Таймфрейм: ${finalTimeframe}хв`);
       
       const signal = await storage.createSignal({
         pairId,
         ownerId,
         direction,
-        timeframe,
+        timeframe: finalTimeframe,
         openPrice: currentPrice.toFixed(5),
         sparklineData: sparkline,
         analysis: analysisDetails,
@@ -498,7 +512,8 @@ export async function registerRoutes(
         ...signal,
         pair,
         confidence,
-        aiAnalysis: aiDecision.analysis
+        aiAnalysis: aiDecision.analysis,
+        recommendedTimeframe: finalTimeframe
       };
 
       return res.status(201).json(enrichedSignal);
