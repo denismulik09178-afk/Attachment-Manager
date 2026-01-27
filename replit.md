@@ -6,14 +6,26 @@ This is a web application that provides AI-powered trading signals for Forex mar
 
 ## Recent Changes (January 2026)
 
-- **ЦІНИ 1 В 1 З TRADINGVIEW**: Всі ціни та індикатори тільки від TradingView API (close price)
-- **ЄДИНЕ ДЖЕРЕЛО ДАНИХ**: Видалено конфліктні джерела (fawazahmed0) - тільки TradingView
-- **ПРОФЕСІЙНИЙ AI АНАЛІЗ**: System prompt з 15+ років досвіду трейдера, технічна термінологія
-- **AI PROMPT UKRAINIAN**: Весь промпт та аналіз повністю українською
-- **COMPACT OUTPUT**: Обмеження 200 символів на AI аналіз для професійності
-- **STRICT FILTERING**: Recommend.All >= 0.30, ADX >= 20 для якісних сигналів
-- **NO AUTO-APPROVE**: Fallback тільки для дуже сильних сигналів (0.50+, ADX 25+)
-- **LOW TEMPERATURE**: 0.15 для стабільних, передбачуваних відповідей
+### Smart Money Concepts (SMC) Integration
+- **SMC Analysis Module**: `server/smc-analysis.ts` - повний модуль для аналізу Smart Money Concepts
+- **Market Structure**: Визначення HH/HL/LH/LL, BOS (Break of Structure), CHOCH (Change of Character)
+- **Liquidity Zones**: FVG (Fair Value Gap), Premium/Discount зони, Liquidity Sweeps
+- **Confluence Scoring**: 100-бальна система оцінки:
+  - Indicators: 30 балів (RSI, MACD, Stoch, CCI, TV Recommend)
+  - Structure: 25 балів (BOS/CHOCH, тренд, свінги)
+  - Liquidity: 20 балів (FVG, Premium/Discount, Sweep)
+  - Timing: 15 балів (Entry patterns: Break+Retest, Impulse→Pullback)
+  - Session: 10 балів (London, New York, Asia)
+- **Strict Filters** (всі мають пройти):
+  - ADX >= 22 (сильний тренд)
+  - Active Session (London/NY/Asia)
+  - HTF Trend Alignment (EMA200 підтверджує)
+  - No Ranging Market (ADX не флет)
+- **Minimum Confluence**: 55% для генерації сигналу
+- **Target Accuracy**: 80-85% через багатошарову фільтрацію
+
+### Previous Updates
+- **ЦІНИ 1 В 1 З TRADINGVIEW**: Всі ціни та індикатори тільки від TradingView API
 - **Multi-User Isolation**: Browser session-based via X-Session-Id header
 - **ADMIN PANEL**: Адмін панель з логіном/паролем (admin/deni2024)
   - Статистика: WIN/LOSE за день та загалом
