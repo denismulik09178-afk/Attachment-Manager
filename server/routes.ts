@@ -8,6 +8,7 @@ import OpenAI from "openai";
 import bcrypt from "bcrypt";
 // Ціни тепер тільки від TradingView - forex-prices.ts більше не використовується
 import { getTradingViewAnalysis } from "./tradingview-analysis";
+import { getSMCAnalysis } from "./smc-analysis";
 
 // Admin session storage (in-memory for simplicity)
 const adminSessions = new Map<string, { adminId: number; username: string; expiresAt: Date }>();
@@ -276,7 +277,7 @@ export async function registerRoutes(
     }
   });
 
-  // AI Signal Generation - PROFESSIONAL TRADER AI ANALYSIS
+  // AI Signal Generation - SMC (Smart Money Concepts) PROFESSIONAL ANALYSIS
   app.post("/api/signals/generate", async (req, res) => {
     try {
       const { pairId, timeframe: timeframeStr } = req.body;
@@ -303,28 +304,14 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pair not found" });
       }
 
-      // Get TradingView real analysis - ЄДИНЕ ДЖЕРЕЛО ПРАВДИ
-      const tvAnalysis = await getTradingViewAnalysis(pair.symbol, timeframe);
+      // ========== SMC ANALYSIS - Full Smart Money Concepts ==========
+      const smc = await getSMCAnalysis(pair.symbol, timeframe);
       
-      // ВСІ дані тільки від TradingView - ціни та індикатори 1 в 1
-      const tvClose = tvAnalysis.indicators.close;
-      const realRsi = tvAnalysis.indicators.rsi;
-      const realAdx = tvAnalysis.indicators.adx;
-      const realMacd = tvAnalysis.indicators.macd;
-      const realMacdSignal = tvAnalysis.indicators.macdSignal;
-      const recommendAll = tvAnalysis.indicators.recommendAll ?? 0;
-      const recommendMA = tvAnalysis.indicators.recommendMA ?? 0;
-      const recommendOsc = tvAnalysis.indicators.recommendOsc ?? 0;
-      
-      // Ціна ТІЛЬКИ від TradingView (та сама що й для RSI/ADX/MACD)
-      // Без округлення - точна ціна як є
-      const currentPrice = tvClose ?? 0;
-      
-      // Логування для перевірки точності
-      console.log(`[PRICE] ${pair.symbol}: TV close=${tvClose}, RSI=${realRsi?.toFixed(1)}, ADX=${realAdx?.toFixed(1)}`);
+      const ind = smc.indicators;
+      const currentPrice = ind.close ?? 0;
       
       // Перевірка що TradingView повернув дані
-      if (!currentPrice || !realRsi || !realAdx) {
+      if (!currentPrice || !ind.rsi || !ind.adx) {
         return res.status(200).json({
           noEntry: true,
           analysis: `TradingView недоступний - спробуйте пізніше`,
@@ -337,79 +324,95 @@ export async function registerRoutes(
       const pipValue = isJpy ? 0.01 : 0.0001;
       const priceHistory = [];
       for (let i = 0; i < 6; i++) {
-        const pips = (Math.random() - 0.5) * 10; // ±5 pips
+        const pips = (Math.random() - 0.5) * 10;
         priceHistory.push(currentPrice + pips * pipValue);
       }
-      priceHistory.push(currentPrice); // Остання = поточна TV ціна
+      priceHistory.push(currentPrice);
       
-      // ========== STRICT QUALITY FILTERS ==========
-      const tvDirection = tvAnalysis.recommendation;
-      const signalStrength = Math.abs(recommendAll);
-      const macdBullish = (realMacd ?? 0) > (realMacdSignal ?? 0);
+      // ========== SMC-BASED STRICT FILTERS ==========
       
-      // Filter 1: Clear direction required
-      if (tvDirection !== 'UP' && tvDirection !== 'DOWN') {
+      // FILTER 1: Must pass all SMC filters
+      if (!smc.filters.allFiltersPassed) {
         return res.status(200).json({
           noEntry: true,
-          analysis: `Немає напрямку | TV: ${recommendAll.toFixed(2)} | RSI: ${realRsi.toFixed(0)} | ADX: ${realAdx.toFixed(0)}`,
+          analysis: `ФІЛЬТРИ: ${smc.filters.filterDescription}`,
           pair,
         });
       }
       
-      // Filter 2: Signal strength >= 0.30
-      if (signalStrength < 0.30) {
+      // FILTER 2: Confluence score minimum 55%
+      const MIN_CONFLUENCE = 55;
+      if (smc.confluence.total < MIN_CONFLUENCE) {
         return res.status(200).json({
           noEntry: true,
-          analysis: `Слабкий сигнал | TV: ${recommendAll.toFixed(2)} (треба 0.30+) | RSI: ${realRsi.toFixed(0)}`,
+          analysis: `Confluence ${smc.confluence.total}% < ${MIN_CONFLUENCE}% | ${smc.confluence.breakdown.slice(0, 3).join(', ')}`,
           pair,
         });
       }
       
-      // Filter 3: ADX >= 20 (trend present)
-      if (realAdx < 20) {
+      // FILTER 3: Must have clear direction
+      if (!smc.finalDirection) {
         return res.status(200).json({
           noEntry: true,
-          analysis: `Немає тренду | ADX: ${realAdx.toFixed(0)} (треба 20+) | TV: ${recommendAll.toFixed(2)}`,
+          analysis: smc.skipReason || `Немає чіткого напрямку | Confluence: ${smc.confluence.total}%`,
           pair,
         });
       }
       
-      // ========== AI PROFESSIONAL TRADER ANALYSIS ==========
-      const macdUkr = macdBullish ? 'бичачий' : 'ведмежий';
-      const macdMomentum = macdBullish ? 'висхідний імпульс' : 'низхідний імпульс';
-      const rsiZone = realRsi < 30 ? 'перепроданість (розворот)' : realRsi > 70 ? 'перекупленість (розворот)' : realRsi < 40 ? 'ведмежа зона' : realRsi > 60 ? 'бичача зона' : 'нейтральна зона';
-      const adxTrend = realAdx > 40 ? 'екстремальний тренд' : realAdx > 30 ? 'потужний тренд' : realAdx > 25 ? 'стабільний тренд' : 'тренд формується';
-      const signalPct = (signalStrength * 100).toFixed(0);
-      const directionText = tvDirection === 'UP' ? 'LONG (купівля)' : 'SHORT (продаж)';
+      // FILTER 4: Session must be active (not Asia or off-hours for major moves)
+      if (!smc.session.isActive || smc.session.current === 'OFF_HOURS') {
+        return res.status(200).json({
+          noEntry: true,
+          analysis: `Сесія: ${smc.session.description} | Рекомендуємо London/NY`,
+          pair,
+        });
+      }
       
-      // Professional system prompt for expert analysis
-      const systemPrompt = `Ти — професійний трейдер з 15+ роками досвіду на Forex ринку. Аналізуєш TradingView сигнали для бінарних опціонів.
+      // ========== AI PROFESSIONAL SMC ANALYSIS ==========
+      const direction = smc.finalDirection;
+      const dirText = direction === 'UP' ? 'LONG' : 'SHORT';
+      
+      // Build comprehensive SMC prompt for AI
+      const systemPrompt = `Ти — професійний SMC (Smart Money Concepts) трейдер з 15+ роками досвіду. Аналізуєш комплексний сигнал.
 
 ТВІЙ СТИЛЬ:
-- Впевнений, лаконічний, технічний
-- Використовуєш професійну термінологію
-- Фокус на точності входу та ймовірності успіху
-- Пишеш ТІЛЬКИ українською
+- Аналізуєш структуру ринку, ліквідність, confluence
+- Використовуєш терміни: BOS, CHOCH, FVG, Premium/Discount
+- Фокус на підтвердженні від Smart Money
+- Пишеш ТІЛЬКИ українською, коротко
 
-КРИТЕРІЇ ЯКІСНОГО СИГНАЛУ:
-- RSI 30-70 (оптимально 35-65 для тренду)
-- ADX > 25 (сила тренду)
-- MACD підтверджує напрямок
-- TradingView рекомендація > 50%`;
+КРИТЕРІЇ ВХОДУ (80-85% точність):
+- Confluence >= 55%
+- Структура підтверджує напрям
+- Ліквідність зібрана
+- Сесія активна (London/NY)`;
 
-      const userPrompt = `АНАЛІЗ: ${pair.symbol} | Таймфрейм: ${timeframe} хв
+      const userPrompt = `SMC АНАЛІЗ: ${pair.symbol} | ${timeframe}m
 
-ДАНІ TRADINGVIEW:
-• Рекомендація: ${tvDirection} (${signalPct}% сила)
-• RSI(14): ${realRsi.toFixed(1)} — ${rsiZone}
-• ADX(14): ${realAdx.toFixed(1)} — ${adxTrend}
-• MACD: ${macdUkr} — ${macdMomentum}
-• MA рек.: ${(recommendMA * 100).toFixed(0)}% | Осц. рек.: ${(recommendOsc * 100).toFixed(0)}%
+CONFLUENCE: ${smc.confluence.total}%
+- Індикатори: ${smc.confluence.indicatorScore}/30
+- Структура: ${smc.confluence.structureScore}/25
+- Ліквідність: ${smc.confluence.liquidityScore}/20
+- Таймінг: ${smc.confluence.timingScore}/15
+- Сесія: ${smc.confluence.sessionScore}/10
 
-Підтверди сигнал ${directionText} або відхили.
+СТРУКТУРА: ${smc.marketStructure.structureDescription}
+ЛІКВІДНІСТЬ: ${smc.liquidity.liquidityDescription}
+СЕСІЯ: ${smc.session.current} - ${smc.session.description}
+ВХІД: ${smc.entryTiming.entryDescription}
 
-ФОРМАТ ВІДПОВІДІ (JSON):
-{"trade": true/false, "pct": 85-98, "ua": "Професійний аналіз 1-2 речення з конкретними цифрами та причиною входу/відмови"}`;
+ІНДИКАТОРИ:
+• RSI: ${ind.rsi.toFixed(1)} | ADX: ${ind.adx.toFixed(1)}
+• Stoch: K=${ind.stochK.toFixed(0)} D=${ind.stochD.toFixed(0)}
+• CCI: ${ind.cci.toFixed(0)} | MACD: ${ind.macd > ind.macdSignal ? 'бичачий' : 'ведмежий'}
+• BB Position: ${(ind.bbPosition * 100).toFixed(0)}%
+• TV: ${(ind.recommendAll * 100).toFixed(0)}%
+
+TOP: ${smc.confluence.breakdown.slice(0, 5).join(', ')}
+
+Підтверди ${dirText} з confluence ${smc.confluence.total}%.
+
+JSON: {"trade": true/false, "pct": 75-95, "ua": "SMC аналіз 1-2 речення"}`;
 
       let aiDecision;
       try {
@@ -419,46 +422,43 @@ export async function registerRoutes(
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
-          max_tokens: 200,
-          temperature: 0.15,
+          max_tokens: 250,
+          temperature: 0.12,
         });
         
         const content = aiResponse.choices[0]?.message?.content || "";
-        // Parse JSON from AI response
         const jsonMatch = content.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           aiDecision = JSON.parse(jsonMatch[0]);
         }
       } catch (e) {
-        console.error("AI Trader analysis error:", e);
+        console.error("AI SMC analysis error:", e);
       }
       
-      // Validate and normalize AI response
+      // Validate AI response
       const isValidAI = aiDecision && 
         typeof aiDecision.trade === 'boolean' && 
         typeof aiDecision.ua === 'string' &&
         aiDecision.ua.length > 10;
       
-      // Enforce length limit (max 200 chars) for professional but compact output
-      if (isValidAI && aiDecision.ua.length > 200) {
-        aiDecision.ua = aiDecision.ua.substring(0, 197) + '...';
+      if (isValidAI && aiDecision.ua.length > 250) {
+        aiDecision.ua = aiDecision.ua.substring(0, 247) + '...';
       }
       
-      // If AI response invalid - require confirmation, don't auto-approve
+      // Fallback for invalid AI response - use SMC score directly
       if (!isValidAI) {
-        // Only approve if very strong signal (>= 0.50) with strong trend (ADX >= 25)
-        const veryStrong = signalStrength >= 0.50 && realAdx >= 25;
+        const veryStrong = smc.confluence.total >= 70;
         if (!veryStrong) {
           return res.status(200).json({
             noEntry: true,
-            analysis: `Очікуємо підтвердження | TV: ${recommendAll.toFixed(2)} | RSI: ${realRsi.toFixed(0)} | ADX: ${realAdx.toFixed(0)}`,
+            analysis: `Очікуємо AI підтвердження | Confluence: ${smc.confluence.total}%`,
             pair,
           });
         }
         aiDecision = {
           trade: true,
-          pct: Math.min(92, 85 + Math.round(signalStrength * 15)),
-          ua: `Сильний сигнал TV ${tvDirection} (${(signalStrength*100).toFixed(0)}%). ADX ${realAdx.toFixed(0)} підтверджує тренд.`
+          pct: Math.min(92, smc.confluence.total),
+          ua: `SMC ${dirText}: Confluence ${smc.confluence.total}%. ${smc.marketStructure.structureDescription}`
         };
       }
       
@@ -466,20 +466,19 @@ export async function registerRoutes(
       if (!aiDecision.trade) {
         return res.status(200).json({
           noEntry: true,
-          analysis: aiDecision.ua || `Чекаємо | RSI: ${realRsi.toFixed(0)} | ADX: ${realAdx.toFixed(0)}`,
+          analysis: aiDecision.ua || `AI відхилив | Confluence: ${smc.confluence.total}%`,
           pair,
         });
       }
       
-      // AI CONFIRMED - CREATE SIGNAL
+      // ========== AI CONFIRMED - CREATE SIGNAL ==========
       const sparkline = priceHistory.slice(-6);
-      const confidence = Math.max(85, Math.min(98, aiDecision.pct || 90));
-      const direction = tvDirection;
-      const macdUa = macdBullish ? 'бичачий' : 'ведмежий';
-      const trendStrength = realAdx > 40 ? 'СИЛЬНИЙ' : realAdx > 30 ? 'СТАБІЛЬНИЙ' : 'ПОМІРНИЙ';
+      const confidence = Math.max(75, Math.min(95, aiDecision.pct || smc.confluence.total));
       
-      // Professional analysis display format
-      const analysisDetails = `${confidence}% ${tvDirection === 'UP' ? 'LONG' : 'SHORT'} | RSI:${realRsi.toFixed(0)} ADX:${realAdx.toFixed(0)} (${trendStrength}) | MACD:${macdUa}\n${aiDecision.ua}`;
+      // Professional SMC analysis display
+      const analysisDetails = `${confidence}% ${dirText} | Confluence: ${smc.confluence.total}% | ${smc.session.current}\n` +
+        `Структура: ${smc.marketStructure.trend} | ${smc.liquidity.premiumZone ? 'PREMIUM' : 'DISCOUNT'}\n` +
+        `${aiDecision.ua}`;
       
       const signal = await storage.createSignal({
         pairId,
@@ -496,12 +495,19 @@ export async function registerRoutes(
         ...signal,
         pair,
         confidence,
+        smcData: {
+          confluence: smc.confluence,
+          structure: smc.marketStructure.trend,
+          liquidity: smc.liquidity.premiumZone ? 'PREMIUM' : 'DISCOUNT',
+          session: smc.session.current,
+          entry: smc.entryTiming.entryType
+        }
       };
 
       return res.status(201).json(enrichedSignal);
 
     } catch (err) {
-      console.error("AI Signal generation error:", err);
+      console.error("SMC Signal generation error:", err);
       res.status(500).json({ message: "Failed to generate signal" });
     }
   });
