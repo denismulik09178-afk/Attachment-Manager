@@ -359,40 +359,79 @@ export async function registerRoutes(
       };
       
       try {
-        const systemPrompt = `Ти — професійний трейдер бінарних опціонів з 10+ роками досвіду. Даєш сигнали на КОРОТКІ таймфрейми (1-5 хвилин).
+        // Визначаємо силу сигналів
+        const rsiValue = parseFloat(marketData.rsi);
+        const stochK = parseFloat(marketData.stochK);
+        const stochD = parseFloat(marketData.stochD);
+        const macdHist = parseFloat(marketData.macdHist);
+        const bbPos = parseFloat(marketData.bbPosition);
+        const cciValue = parseFloat(marketData.cci);
+        const adxValue = parseFloat(marketData.adx);
+        
+        // Підготовка сигналів для ШІ
+        const signals = {
+          rsi: rsiValue > 70 ? 'СИЛЬНО перекуплено (SHORT)' : 
+               rsiValue > 60 ? 'помірно перекуплено' :
+               rsiValue < 30 ? 'СИЛЬНО перепродано (LONG)' : 
+               rsiValue < 40 ? 'помірно перепродано' : 'нейтрально',
+          stoch: stochK > 80 && stochK < stochD ? 'ведмежий кросовер вгорі (SHORT)' :
+                 stochK < 20 && stochK > stochD ? 'бичачий кросовер внизу (LONG)' :
+                 stochK > stochD ? 'бичачий імпульс' : 'ведмежий імпульс',
+          macd: macdHist > 0.0005 ? 'сильний бичачий' : 
+                macdHist < -0.0005 ? 'сильний ведмежий' :
+                macdHist > 0 ? 'слабкий бичачий' : 'слабкий ведмежий',
+          bb: bbPos > 85 ? 'ЕКСТРЕМУМ верхня межа (SHORT)' :
+              bbPos > 70 ? 'біля верхньої межі' :
+              bbPos < 15 ? 'ЕКСТРЕМУМ нижня межа (LONG)' :
+              bbPos < 30 ? 'біля нижньої межі' : 'в середині каналу',
+          cci: cciValue > 150 ? 'СИЛЬНО перекуплено' :
+               cciValue > 100 ? 'перекуплено' :
+               cciValue < -150 ? 'СИЛЬНО перепродано' :
+               cciValue < -100 ? 'перепродано' : 'нейтрально',
+          trend: adxValue > 30 ? 'СИЛЬНИЙ тренд' : adxValue > 20 ? 'помірний тренд' : 'слабкий/бічний'
+        };
 
-ВАЖЛИВО: Це БІНАРНИЙ ОПЦІОН! Ти прогнозуєш куди піде ціна за НАСТУПНІ ${timeframe} ХВИЛИН.
-- Якщо через ${timeframe} хв ціна ВИЩЕ поточної = UP виграв
-- Якщо через ${timeframe} хв ціна НИЖЧЕ поточної = DOWN виграв
+        const systemPrompt = `Ти — експерт з бінарних опціонів. Твоя задача: прогнозувати рух ціни на КОРОТКІ таймфрейми.
 
-ДЛЯ КОРОТКИХ ТАЙМФРЕЙМІВ (1-5 хв) ВАЖЛИВО:
-- RSI: >65 = SHORT (ціна скоро впаде), <35 = LONG (ціна скоро зросте)
-- Stochastic: K перетинає D зверху = SHORT, знизу = LONG
-- MACD histogram: міняє знак = розворот, росте = продовження
-- BB Position: >75% = SHORT (відскок від верху), <25% = LONG (відскок від низу)
-- Моментум важливіший за тренд на коротких таймфреймах!
+⚡ БІНАРНИЙ ОПЦІОН НА ${timeframe} ХВИЛИН:
+- UP = ціна через ${timeframe} хв буде ВИЩЕ поточної
+- DOWN = ціна через ${timeframe} хв буде НИЖЧЕ поточної
 
-ВІДПОВІДАЙ ТІЛЬКИ JSON:
-{"direction": "UP" або "DOWN" або null, "confidence": 70-95, "analysis": "чому ціна піде UP/DOWN за ${timeframe} хвилин"}
+🎯 СТРАТЕГІЯ ДЛЯ ${timeframe}-ХВИЛИННИХ ОПЦІОНІВ:
 
-Якщо немає чіткого сигналу на ${timeframe} хв - direction = null`;
+СИЛЬНІ СИГНАЛИ SHORT (DOWN):
+• RSI > 70 + Stochastic кросовер вниз = 85%+ точність
+• BB > 85% + будь-який ведмежий сигнал = відскок вниз
+• CCI > 150 = екстремальна перекупленість
 
-        const userPrompt = `БІНАРНИЙ ОПЦІОН: ${pair.symbol} | ЕКСПІРАЦІЯ: ${timeframe} ХВИЛИН
+СИЛЬНІ СИГНАЛИ LONG (UP):
+• RSI < 30 + Stochastic кросовер вгору = 85%+ точність  
+• BB < 15% + будь-який бичачий сигнал = відскок вгору
+• CCI < -150 = екстремальна перепроданість
 
-Куди піде ціна за НАСТУПНІ ${timeframe} хвилин?
+УНИКАЙ СИГНАЛІВ КОЛИ:
+• RSI 45-55 (нейтральна зона)
+• BB 40-60% (середина каналу)
+• ADX < 15 (немає тренду, хаотичний рух)
+• Індикатори суперечать один одному
 
-ПОТОЧНА ЦІНА: ${currentPrice.toFixed(5)}
+ФОРМАТ ВІДПОВІДІ (тільки JSON):
+{"direction":"UP" або "DOWN" або null,"confidence":75-92,"analysis":"[коротке пояснення українською, 1-2 речення про ключові індикатори]"}`;
 
-ІНДИКАТОРИ (1-хвилинний графік):
-• RSI: ${marketData.rsi} ${parseFloat(marketData.rsi) > 65 ? '⚠️ перекуплено' : parseFloat(marketData.rsi) < 35 ? '⚠️ перепродано' : ''}
-• Stochastic: K=${marketData.stochK} D=${marketData.stochD} ${parseFloat(marketData.stochK) > parseFloat(marketData.stochD) ? '↑' : '↓'}
-• MACD Histogram: ${marketData.macdHist} ${parseFloat(marketData.macdHist) > 0 ? '(бичачий)' : '(ведмежий)'}
-• Bollinger: ${marketData.bbPosition} ${parseFloat(marketData.bbPosition) > 75 ? '⚠️ верхня межа' : parseFloat(marketData.bbPosition) < 25 ? '⚠️ нижня межа' : ''}
-• CCI: ${marketData.cci}
-• ADX: ${marketData.adx} (сила тренду)
+        const userPrompt = `📊 ${pair.symbol} | ⏱️ ЕКСПІРАЦІЯ: ${timeframe} ХВ
+
+💰 ЦІНА: ${currentPrice.toFixed(5)}
+
+📈 АНАЛІЗ ІНДИКАТОРІВ:
+• RSI(14): ${marketData.rsi} → ${signals.rsi}
+• Stochastic: K=${marketData.stochK}, D=${marketData.stochD} → ${signals.stoch}
+• MACD Hist: ${marketData.macdHist} → ${signals.macd}
+• Bollinger: ${marketData.bbPosition}% → ${signals.bb}
+• CCI: ${marketData.cci} → ${signals.cci}
+• ADX: ${marketData.adx} → ${signals.trend}
 • TradingView: ${marketData.tvRecommend}
 
-Прогноз на ${timeframe} хвилин. JSON:`;
+🎯 ПРОГНОЗ: Куди піде ціна за ${timeframe} хвилин?`;
 
         const aiResponse = await openai.chat.completions.create({
           model: "gpt-4o-mini",

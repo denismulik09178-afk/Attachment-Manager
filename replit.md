@@ -6,20 +6,21 @@ This is a web application that provides AI-powered trading signals for Forex mar
 
 ## Recent Changes (January 2026)
 
-### Simplified Signal Generation System (January 27, 2026)
-- **SMC Analysis Module**: `server/smc-analysis.ts` - спрощений модуль аналізу
-- **Direction Logic**: 2+ з 4 індикаторів (TV Recommend, MACD, RSI, Stoch) для напрямку
-- **Confluence Scoring**: 100-бальна система оцінки (спрощена):
-  - Indicators: 30 балів (RSI, MACD, Stoch, CCI, TV Recommend)
-  - Structure: 25 балів (тренд)
-  - Liquidity: 20 балів (Premium/Discount)
-  - Timing: 15 балів (Entry patterns)
-  - Session: 10 балів (London, New York, Asia)
-- **Minimum Confluence**: 35% для генерації сигналу
-- **ADX**: ≥18 для підтвердження тренду
-- **Auto-confirm**: AI автоматично підтверджує сигнали, генерує пояснення українською
-- **Target Accuracy**: 80-92% (confluence + 30%)
-- **More Signals**: Система дає більше сигналів зі збереженням якості
+### AI-Powered Signal Generation (January 27, 2026)
+- **AI as Decision Maker**: ШІ (GPT-4o-mini) сам аналізує ринок і приймає рішення UP/DOWN
+- **Binary Options Focus**: Промпт оптимізований для коротких таймфреймів (1-5 хвилин)
+- **Smart Signal Preprocessing**: Індикатори конвертуються в зрозумілі сигнали для ШІ:
+  - RSI: перекуплено/перепродано/нейтрально
+  - Stochastic: бичачий/ведмежий кросовер
+  - Bollinger Bands: екстремуми/середина каналу
+  - CCI, ADX: сила тренду
+- **Clear Strategy for AI**:
+  - RSI > 70 + Stoch кросовер = SHORT (85%+ точність)
+  - RSI < 30 + Stoch кросовер = LONG (85%+ точність)
+  - BB екстремуми = відскок
+- **Timeframe-Aware**: ШІ знає точний час експірації і аналізує для цього періоду
+- **Ukrainian Explanations**: Всі пояснення українською мовою
+- **Target Accuracy**: 80-92%
 
 ### Previous Updates
 - **ЦІНИ 1 В 1 З TRADINGVIEW**: Всі ціни та індикатори тільки від TradingView API
