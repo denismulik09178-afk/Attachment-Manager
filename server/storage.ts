@@ -1,7 +1,7 @@
 
-import { users, pairs, signals, settings, type User, type InsertUser, type Pair, type Signal, type InsertSignal, type Setting } from "@shared/schema";
+import { users, pairs, signals, settings, admins, type User, type InsertUser, type Pair, type Signal, type InsertSignal, type Setting, type Admin, type InsertAdmin } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gte, sql, count } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -30,6 +30,17 @@ export interface IStorage {
   }>;
   updateSignalPrice(id: number, currentPrice: string): Promise<Signal>;
   closeSignal(id: number, closePrice: string, result: string): Promise<Signal>;
+  
+  // Admin
+  getAdminByUsername(username: string): Promise<Admin | undefined>;
+  createAdmin(admin: InsertAdmin): Promise<Admin>;
+  updateAdminLastLogin(id: number): Promise<Admin>;
+  
+  // Admin Statistics
+  getDailySignalStats(date: Date): Promise<{ wins: number; losses: number; draws: number; total: number }>;
+  getAllSignalsCount(): Promise<number>;
+  getUniqueUsersCount(): Promise<number>;
+  getTodaySignalsCount(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -150,6 +161,75 @@ export class DatabaseStorage implements IStorage {
       closeTime: new Date()
     }).where(eq(signals.id, id)).returning();
     return signal;
+  }
+  
+  // Admin methods
+  async getAdminByUsername(username: string): Promise<Admin | undefined> {
+    const [admin] = await db.select().from(admins).where(eq(admins.username, username));
+    return admin;
+  }
+  
+  async createAdmin(admin: InsertAdmin): Promise<Admin> {
+    const [newAdmin] = await db.insert(admins).values(admin).returning();
+    return newAdmin;
+  }
+  
+  async updateAdminLastLogin(id: number): Promise<Admin> {
+    const [admin] = await db.update(admins)
+      .set({ lastLogin: new Date() })
+      .where(eq(admins.id, id))
+      .returning();
+    return admin;
+  }
+  
+  // Admin Statistics methods
+  async getDailySignalStats(date: Date): Promise<{ wins: number; losses: number; draws: number; total: number }> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    const daySignals = await db.select({
+      result: signals.result,
+      closeTime: signals.closeTime,
+    }).from(signals)
+      .where(eq(signals.status, 'closed'));
+    
+    // Filter signals closed today (between startOfDay and endOfDay)
+    const todaySignals = daySignals.filter(s => {
+      if (!s.closeTime) return false;
+      const closeTime = new Date(s.closeTime);
+      return closeTime >= startOfDay && closeTime <= endOfDay;
+    });
+    
+    return {
+      total: todaySignals.length,
+      wins: todaySignals.filter(s => s.result === 'WIN').length,
+      losses: todaySignals.filter(s => s.result === 'LOSE').length,
+      draws: todaySignals.filter(s => s.result === 'DRAW').length,
+    };
+  }
+  
+  async getAllSignalsCount(): Promise<number> {
+    const result = await db.select({ count: count() }).from(signals);
+    return result[0]?.count || 0;
+  }
+  
+  async getUniqueUsersCount(): Promise<number> {
+    const result = await db.select({ 
+      count: sql<number>`count(distinct ${signals.ownerId})`
+    }).from(signals);
+    return Number(result[0]?.count) || 0;
+  }
+  
+  async getTodaySignalsCount(): Promise<number> {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    
+    const result = await db.select({ count: count() })
+      .from(signals)
+      .where(gte(signals.openTime, startOfDay));
+    return result[0]?.count || 0;
   }
 }
 

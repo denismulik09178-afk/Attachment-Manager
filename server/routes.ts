@@ -1,12 +1,40 @@
 
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
+import bcrypt from "bcrypt";
 // Ціни тепер тільки від TradingView - forex-prices.ts більше не використовується
 import { getTradingViewAnalysis } from "./tradingview-analysis";
+
+// Admin session storage (in-memory for simplicity)
+const adminSessions = new Map<string, { adminId: number; username: string; expiresAt: Date }>();
+
+// Default admin credentials (created on first run)
+const DEFAULT_ADMIN_USERNAME = "admin";
+const DEFAULT_ADMIN_PASSWORD = "deni2024";
+
+// Helper to generate session token
+function generateSessionToken(): string {
+  return `admin_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+}
+
+// Middleware to check admin authentication
+function requireAdmin(req: Request, res: Response, next: () => void) {
+  const token = req.headers['x-admin-token'] as string;
+  if (!token || !adminSessions.has(token)) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  const session = adminSessions.get(token)!;
+  if (session.expiresAt < new Date()) {
+    adminSessions.delete(token);
+    return res.status(401).json({ message: "Session expired" });
+  }
+  (req as any).admin = session;
+  next();
+}
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -17,6 +45,152 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  // ========== ADMIN AUTHENTICATION ==========
+  
+  // Initialize default admin on startup
+  (async () => {
+    try {
+      const existingAdmin = await storage.getAdminByUsername(DEFAULT_ADMIN_USERNAME);
+      if (!existingAdmin) {
+        const hashedPassword = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
+        await storage.createAdmin({ username: DEFAULT_ADMIN_USERNAME, passwordHash: hashedPassword });
+        console.log(`[ADMIN] Default admin created: ${DEFAULT_ADMIN_USERNAME}`);
+      }
+    } catch (e) {
+      console.error("[ADMIN] Failed to initialize default admin:", e);
+    }
+  })();
+
+  // Admin login
+  app.post("/api/admin/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ message: "Username and password required" });
+      }
+      
+      const admin = await storage.getAdminByUsername(username);
+      if (!admin) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      
+      const validPassword = await bcrypt.compare(password, admin.passwordHash);
+      if (!validPassword) {
+        return res.status(401).json({ message: "Invalid credentials" });
+      }
+      
+      // Create session (valid for 24 hours)
+      const token = generateSessionToken();
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      adminSessions.set(token, { adminId: admin.id, username: admin.username, expiresAt });
+      
+      await storage.updateAdminLastLogin(admin.id);
+      
+      res.json({ token, username: admin.username, expiresAt });
+    } catch (error) {
+      console.error("Admin login error:", error);
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // Admin logout
+  app.post("/api/admin/logout", (req, res) => {
+    const token = req.headers['x-admin-token'] as string;
+    if (token) {
+      adminSessions.delete(token);
+    }
+    res.json({ message: "Logged out" });
+  });
+
+  // Check admin session
+  app.get("/api/admin/session", (req, res) => {
+    const token = req.headers['x-admin-token'] as string;
+    if (!token || !adminSessions.has(token)) {
+      return res.status(401).json({ authenticated: false });
+    }
+    const session = adminSessions.get(token)!;
+    if (session.expiresAt < new Date()) {
+      adminSessions.delete(token);
+      return res.status(401).json({ authenticated: false });
+    }
+    res.json({ authenticated: true, username: session.username });
+  });
+
+  // Admin statistics endpoint
+  app.get("/api/admin/stats", requireAdmin, async (req, res) => {
+    try {
+      const todayStats = await storage.getDailySignalStats(new Date());
+      const totalSignals = await storage.getAllSignalsCount();
+      const uniqueUsers = await storage.getUniqueUsersCount();
+      const todaySignals = await storage.getTodaySignalsCount();
+      const allStats = await storage.getSignalStats();
+      
+      res.json({
+        today: todayStats,
+        overall: {
+          totalSignals,
+          wins: allStats.wins,
+          losses: allStats.losses,
+          winRate: allStats.total > 0 ? ((allStats.wins / allStats.total) * 100).toFixed(1) : 0,
+        },
+        users: {
+          unique: uniqueUsers,
+        },
+        todaySignalsCount: todaySignals,
+      });
+    } catch (error) {
+      console.error("Admin stats error:", error);
+      res.status(500).json({ message: "Failed to get stats" });
+    }
+  });
+
+  // Admin - get all signals (for management)
+  app.get("/api/admin/signals", requireAdmin, async (req, res) => {
+    try {
+      const active = await storage.getActiveSignals();
+      const history = await storage.getSignalHistory(undefined, 100);
+      const pairs = await storage.getAllPairs();
+      
+      // Enrich signals with pair info
+      const pairMap = new Map(pairs.map(p => [p.id, p]));
+      const enrichSignal = (s: any) => ({ ...s, pair: pairMap.get(s.pairId) });
+      
+      res.json({
+        active: active.map(enrichSignal),
+        history: history.map(enrichSignal),
+      });
+    } catch (error) {
+      console.error("Admin signals error:", error);
+      res.status(500).json({ message: "Failed to get signals" });
+    }
+  });
+
+  // Admin - get all pairs (for management)
+  app.get("/api/admin/pairs", requireAdmin, async (req, res) => {
+    try {
+      const pairs = await storage.getAllPairs();
+      res.json(pairs);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get pairs" });
+    }
+  });
+
+  // Admin - toggle pair enabled status
+  app.patch("/api/admin/pairs/:id/toggle", requireAdmin, async (req, res) => {
+    try {
+      const pairId = Number(req.params.id);
+      const pair = await storage.getPair(pairId);
+      if (!pair) {
+        return res.status(404).json({ message: "Pair not found" });
+      }
+      const updated = await storage.updatePair(pairId, { isEnabled: !pair.isEnabled });
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to toggle pair" });
+    }
+  });
 
   // --- Pairs ---
   app.get(api.pairs.list.path, async (req, res) => {
@@ -200,23 +374,53 @@ export async function registerRoutes(
         });
       }
       
-      // ========== AI TRADER DECISION ==========
+      // ========== AI PROFESSIONAL TRADER ANALYSIS ==========
       const macdUkr = macdBullish ? 'бичачий' : 'ведмежий';
-      const rsiZone = realRsi < 30 ? 'перепроданість' : realRsi > 70 ? 'перекупленість' : realRsi < 45 ? 'слабкий' : realRsi > 55 ? 'сильний' : 'нейтральний';
-      const adxTrend = realAdx > 30 ? 'потужний' : realAdx > 25 ? 'стабільний' : 'формується';
+      const macdMomentum = macdBullish ? 'висхідний імпульс' : 'низхідний імпульс';
+      const rsiZone = realRsi < 30 ? 'перепроданість (розворот)' : realRsi > 70 ? 'перекупленість (розворот)' : realRsi < 40 ? 'ведмежа зона' : realRsi > 60 ? 'бичача зона' : 'нейтральна зона';
+      const adxTrend = realAdx > 40 ? 'екстремальний тренд' : realAdx > 30 ? 'потужний тренд' : realAdx > 25 ? 'стабільний тренд' : 'тренд формується';
+      const signalPct = (signalStrength * 100).toFixed(0);
+      const directionText = tvDirection === 'UP' ? 'LONG (купівля)' : 'SHORT (продаж)';
       
-      const aiTraderPrompt = `${pair.symbol} ${timeframe}хв | TV: ${tvDirection} ${(signalStrength*100).toFixed(0)}% | RSI: ${realRsi.toFixed(0)} (${rsiZone}) | ADX: ${realAdx.toFixed(0)} (${adxTrend}) | MACD: ${macdUkr}
+      // Professional system prompt for expert analysis
+      const systemPrompt = `Ти — професійний трейдер з 15+ роками досвіду на Forex ринку. Аналізуєш TradingView сигнали для бінарних опціонів.
 
-Сигнал ${tvDirection === 'UP' ? 'КУПІВЛЯ' : 'ПРОДАЖ'}. Підтверди або відхили як трейдер.
-JSON: {"trade":true/false,"pct":85-99,"ua":"1 речення чому"}`;
+ТВІЙ СТИЛЬ:
+- Впевнений, лаконічний, технічний
+- Використовуєш професійну термінологію
+- Фокус на точності входу та ймовірності успіху
+- Пишеш ТІЛЬКИ українською
+
+КРИТЕРІЇ ЯКІСНОГО СИГНАЛУ:
+- RSI 30-70 (оптимально 35-65 для тренду)
+- ADX > 25 (сила тренду)
+- MACD підтверджує напрямок
+- TradingView рекомендація > 50%`;
+
+      const userPrompt = `АНАЛІЗ: ${pair.symbol} | Таймфрейм: ${timeframe} хв
+
+ДАНІ TRADINGVIEW:
+• Рекомендація: ${tvDirection} (${signalPct}% сила)
+• RSI(14): ${realRsi.toFixed(1)} — ${rsiZone}
+• ADX(14): ${realAdx.toFixed(1)} — ${adxTrend}
+• MACD: ${macdUkr} — ${macdMomentum}
+• MA рек.: ${(recommendMA * 100).toFixed(0)}% | Осц. рек.: ${(recommendOsc * 100).toFixed(0)}%
+
+Підтверди сигнал ${directionText} або відхили.
+
+ФОРМАТ ВІДПОВІДІ (JSON):
+{"trade": true/false, "pct": 85-98, "ua": "Професійний аналіз 1-2 речення з конкретними цифрами та причиною входу/відмови"}`;
 
       let aiDecision;
       try {
         const aiResponse = await openai.chat.completions.create({
           model: "gpt-4o-mini",
-          messages: [{ role: "user", content: aiTraderPrompt }],
-          max_tokens: 150,
-          temperature: 0.1,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          max_tokens: 200,
+          temperature: 0.15,
         });
         
         const content = aiResponse.choices[0]?.message?.content || "";
@@ -235,9 +439,9 @@ JSON: {"trade":true/false,"pct":85-99,"ua":"1 речення чому"}`;
         typeof aiDecision.ua === 'string' &&
         aiDecision.ua.length > 10;
       
-      // Enforce length limit (max 150 chars) for compact output
-      if (isValidAI && aiDecision.ua.length > 150) {
-        aiDecision.ua = aiDecision.ua.substring(0, 147) + '...';
+      // Enforce length limit (max 200 chars) for professional but compact output
+      if (isValidAI && aiDecision.ua.length > 200) {
+        aiDecision.ua = aiDecision.ua.substring(0, 197) + '...';
       }
       
       // If AI response invalid - require confirmation, don't auto-approve
@@ -269,11 +473,13 @@ JSON: {"trade":true/false,"pct":85-99,"ua":"1 речення чому"}`;
       
       // AI CONFIRMED - CREATE SIGNAL
       const sparkline = priceHistory.slice(-6);
-      const confidence = Math.max(85, Math.min(99, aiDecision.pct || 90));
+      const confidence = Math.max(85, Math.min(98, aiDecision.pct || 90));
       const direction = tvDirection;
       const macdUa = macdBullish ? 'бичачий' : 'ведмежий';
+      const trendStrength = realAdx > 40 ? 'СИЛЬНИЙ' : realAdx > 30 ? 'СТАБІЛЬНИЙ' : 'ПОМІРНИЙ';
       
-      const analysisDetails = `${confidence}% | ${tvDirection === 'UP' ? 'КУПІВЛЯ' : 'ПРОДАЖ'} | RSI:${realRsi.toFixed(0)} ADX:${realAdx.toFixed(0)} MACD:${macdUa}\n${aiDecision.ua}`;
+      // Professional analysis display format
+      const analysisDetails = `${confidence}% ${tvDirection === 'UP' ? 'LONG' : 'SHORT'} | RSI:${realRsi.toFixed(0)} ADX:${realAdx.toFixed(0)} (${trendStrength}) | MACD:${macdUa}\n${aiDecision.ua}`;
       
       const signal = await storage.createSignal({
         pairId,

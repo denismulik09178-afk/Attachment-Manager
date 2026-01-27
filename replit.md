@@ -8,12 +8,18 @@ This is a web application that provides AI-powered trading signals for Forex mar
 
 - **ЦІНИ 1 В 1 З TRADINGVIEW**: Всі ціни та індикатори тільки від TradingView API (close price)
 - **ЄДИНЕ ДЖЕРЕЛО ДАНИХ**: Видалено конфліктні джерела (fawazahmed0) - тільки TradingView
+- **ПРОФЕСІЙНИЙ AI АНАЛІЗ**: System prompt з 15+ років досвіду трейдера, технічна термінологія
 - **AI PROMPT UKRAINIAN**: Весь промпт та аналіз повністю українською
-- **COMPACT OUTPUT**: Обмеження 150 символів на AI аналіз для стислості
+- **COMPACT OUTPUT**: Обмеження 200 символів на AI аналіз для професійності
 - **STRICT FILTERING**: Recommend.All >= 0.30, ADX >= 20 для якісних сигналів
 - **NO AUTO-APPROVE**: Fallback тільки для дуже сильних сигналів (0.50+, ADX 25+)
-- **LOW TEMPERATURE**: 0.1 для стабільних, передбачуваних відповідей
+- **LOW TEMPERATURE**: 0.15 для стабільних, передбачуваних відповідей
 - **Multi-User Isolation**: Browser session-based via X-Session-Id header
+- **ADMIN PANEL**: Адмін панель з логіном/паролем (admin/deni2024)
+  - Статистика: WIN/LOSE за день та загалом
+  - Кількість унікальних користувачів
+  - Керування валютними парами (вкл/викл)
+  - Win Rate відображення
 
 **Supported Forex Pairs:**
 - EUR/USD, GBP/USD, USD/JPY, USD/CHF, USD/CAD, AUD/USD

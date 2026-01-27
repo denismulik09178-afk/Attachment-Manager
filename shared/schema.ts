@@ -43,11 +43,21 @@ export const settings = pgTable("settings", {
   value: jsonb("value").notNull(), // Flexible storage for config
 });
 
+// Admin credentials for admin panel access
+export const admins = pgTable("admins", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastLogin: timestamp("last_login"),
+});
+
 // Schemas
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertPairSchema = createInsertSchema(pairs).omit({ id: true });
 export const insertSignalSchema = createInsertSchema(signals).omit({ id: true, openTime: true, closeTime: true, result: true, status: true });
 export const insertSettingsSchema = createInsertSchema(settings).omit({ id: true });
+export const insertAdminSchema = createInsertSchema(admins).omit({ id: true, createdAt: true, lastLogin: true });
 
 // Types
 export type User = typeof users.$inferSelect;
@@ -56,6 +66,8 @@ export type Pair = typeof pairs.$inferSelect;
 export type Signal = typeof signals.$inferSelect;
 export type InsertSignal = z.infer<typeof insertSignalSchema>;
 export type Setting = typeof settings.$inferSelect;
+export type Admin = typeof admins.$inferSelect;
+export type InsertAdmin = z.infer<typeof insertAdminSchema>;
 
 // Enum-like constants
 export const TIMEFRAMES = [1, 3, 5];
