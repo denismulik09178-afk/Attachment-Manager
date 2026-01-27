@@ -6,13 +6,13 @@ This is a web application that provides AI-powered trading signals for Forex mar
 
 ## Recent Changes (January 2026)
 
-- **TradingView Integration Fixed**: Now uses real TradingView API values (Recommend.All, MA, Oscillators, RSI, MACD, ADX)
-- **Real ADX Integration**: Uses TradingView's real ADX value instead of simulated data for trend strength confirmation
-- **Stricter TradingView Thresholds**: STRONG signals require 0.55+ (was 0.5), BUY/SELL require 0.25+ (was 0.2)
-- **Stricter Oscillator Thresholds**: recommendOsc > 0.05 for confirmations (was > -0.1)
-- **Signal Quality**: Requires 15/30+ confirmation points, 2-3/5 oscillator confirmations, ADX > 15
-- **Timeframe Parsing**: Fixed string-to-number conversion ("5m" → 5 minutes)
-- **Price Consistency**: Sparkline data now generated within 50 pips of real price
+- **AI TRADER ANALYSIS**: Complete rewrite - OpenAI now analyzes market like a professional trader with 25+ years experience
+- **Professional Decision Making**: AI evaluates TradingView data, RSI, ADX, MACD, Bollinger Bands and decides whether to trade
+- **Detailed Ukrainian Explanations**: AI provides reasoning in Ukrainian explaining why it recommends entering or waiting
+- **TradingView Integration**: Uses real TradingView API values (Recommend.All, MA, Oscillators, RSI, MACD, ADX)
+- **Smart Filtering**: AI rejects weak signals with clear explanations ("Відсутність тренду", "ADX нижчий за 20")
+- **Timeframe Parsing**: Handles both numbers (1, 5, 60) and strings ("5m", "1h")
+- **Price Consistency**: Sparkline data generated within 50 pips of real price
 - **Multi-User Isolation**: Browser session-based via X-Session-Id header
 
 **Supported Forex Pairs:**
