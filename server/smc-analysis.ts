@@ -684,20 +684,22 @@ export async function getSMCAnalysis(
       prevHigh, prevLow
     );
     
-    // Determine initial direction (SIMPLIFIED - lower thresholds)
+    // Determine initial direction - STRICT: need strong agreement
     let initialDirection: 'UP' | 'DOWN' | null = null;
-    // Use combination of indicators for direction
-    const bullishSignals = (indicators.recommendAll > 0 ? 1 : 0) +
-                           (indicators.macd > indicators.macdSignal ? 1 : 0) +
-                           (indicators.rsi > 50 ? 1 : 0) +
-                           (indicators.stochK > indicators.stochD ? 1 : 0);
-    const bearishSignals = (indicators.recommendAll < 0 ? 1 : 0) +
-                           (indicators.macd < indicators.macdSignal ? 1 : 0) +
-                           (indicators.rsi < 50 ? 1 : 0) +
-                           (indicators.stochK < indicators.stochD ? 1 : 0);
     
-    if (bullishSignals >= 2) initialDirection = 'UP';
-    else if (bearishSignals >= 2) initialDirection = 'DOWN';
+    // Count confirmations (need 3+ out of 4 for direction)
+    const bullishSignals = (indicators.recommendAll >= 0.3 ? 1 : 0) +
+                           (indicators.macd > indicators.macdSignal ? 1 : 0) +
+                           (indicators.rsi > 55 ? 1 : 0) +
+                           (indicators.stochK > indicators.stochD && indicators.stochK > 50 ? 1 : 0);
+    const bearishSignals = (indicators.recommendAll <= -0.3 ? 1 : 0) +
+                           (indicators.macd < indicators.macdSignal ? 1 : 0) +
+                           (indicators.rsi < 45 ? 1 : 0) +
+                           (indicators.stochK < indicators.stochD && indicators.stochK < 50 ? 1 : 0);
+    
+    // Need 3+ signals for confidence
+    if (bullishSignals >= 3) initialDirection = 'UP';
+    else if (bearishSignals >= 3) initialDirection = 'DOWN';
     
     // HTF Bias (simplified - use structure trend)
     const htfBias = marketStructure.trend === 'BULLISH' ? 'BULLISH' : 
@@ -721,16 +723,26 @@ export async function getSMCAnalysis(
       indicators, marketStructure, liquidity, entryTiming, session, filters, initialDirection
     );
     
-    // Final decision (SIMPLIFIED - only require direction and basic confluence)
-    const MIN_CONFLUENCE = 25; // Lowered from 55 to allow more signals
-    const shouldTrade = initialDirection !== null && confluence.total >= MIN_CONFLUENCE;
+    // Final decision - STRICT: need high confluence AND direction AND active session
+    const MIN_CONFLUENCE = 50; // Need at least 50% confluence
+    const isActiveSession = session.current === 'LONDON' || session.current === 'NEW_YORK' || session.current === 'OVERLAP';
+    const hasTrend = indicators.adx >= 20; // ADX shows trend exists
+    
+    const shouldTrade = initialDirection !== null && 
+                        confluence.total >= MIN_CONFLUENCE && 
+                        isActiveSession &&
+                        hasTrend;
     
     let skipReason: string | null = null;
     if (!shouldTrade) {
       if (!initialDirection) {
-        skipReason = 'Немає чіткого напрямку';
+        skipReason = 'Індикатори не підтверджують напрямок';
       } else if (confluence.total < MIN_CONFLUENCE) {
-        skipReason = `Слабкий сигнал ${confluence.total}%`;
+        skipReason = `Confluence ${confluence.total}% < ${MIN_CONFLUENCE}% мінімум`;
+      } else if (!isActiveSession) {
+        skipReason = `Сесія ${session.current} - чекаємо London/NY`;
+      } else if (!hasTrend) {
+        skipReason = `ADX ${indicators.adx.toFixed(0)} - флет, немає тренду`;
       }
     }
     

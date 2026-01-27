@@ -329,23 +329,13 @@ export async function registerRoutes(
       }
       priceHistory.push(currentPrice);
       
-      // ========== SIMPLIFIED FILTERS ==========
+      // ========== STRICT FILTERS - ONLY CONFIDENT SIGNALS ==========
       
-      // FILTER 1: Must have clear direction
-      if (!smc.finalDirection) {
+      // SMC module already checked: direction, confluence, session, ADX
+      if (!smc.shouldTrade || !smc.finalDirection) {
         return res.status(200).json({
           noEntry: true,
-          analysis: smc.skipReason || `Немає чіткого напрямку`,
-          pair,
-        });
-      }
-      
-      // FILTER 2: Basic confluence check (lowered from 55% to 30%)
-      const MIN_CONFLUENCE = 30;
-      if (smc.confluence.total < MIN_CONFLUENCE) {
-        return res.status(200).json({
-          noEntry: true,
-          analysis: `Слабкий сигнал ${smc.confluence.total}% | ${smc.confluence.breakdown.slice(0, 2).join(', ')}`,
+          analysis: smc.skipReason || `Немає впевненого сигналу`,
           pair,
         });
       }
@@ -396,36 +386,61 @@ TOP: ${smc.confluence.breakdown.slice(0, 5).join(', ')}
 
 JSON: {"trade": true/false, "pct": 75-95, "ua": "SMC аналіз 1-2 речення"}`;
 
-      // SIMPLIFIED: Auto-approve signals, just generate explanation
-      let aiAnalysis = '';
+      // AI FINAL CHECK - can reject if not confident
+      let aiDecision: { trade: boolean; pct: number; ua: string } | null = null;
+      
       try {
-        const simplePrompt = `${pair.symbol} ${timeframe}m ${dirText}. Confluence: ${smc.confluence.total}%. Напиши 1-2 речення чому це хороший вхід. RSI=${ind.rsi.toFixed(0)}, TV=${(ind.recommendAll * 100).toFixed(0)}%. Українською.`;
+        const aiPrompt = `${pair.symbol} ${timeframe}m. Confluence: ${smc.confluence.total}%.
+Індикатори: RSI=${ind.rsi.toFixed(0)}, MACD=${ind.macd > ind.macdSignal ? 'BUY' : 'SELL'}, Stoch=${ind.stochK.toFixed(0)}, TV=${(ind.recommendAll * 100).toFixed(0)}%
+ADX=${ind.adx.toFixed(0)}, Сесія: ${smc.session.current}
+Структура: ${smc.marketStructure.trend}
+
+Сигнал: ${dirText}. Підтверджуєш? Відповідь JSON: {"trade": true/false, "pct": 75-92, "ua": "пояснення 1-2 речення"}`;
         
         const aiResponse = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
-            { role: "system", content: "Ти трейдер. Коротко пояснюй сигнали українською." },
-            { role: "user", content: simplePrompt }
+            { role: "system", content: "Ти професійний трейдер. Підтверджуй ТІЛЬКИ впевнені сигнали. Якщо є сумніви - відхиляй (trade: false). Відповідай JSON українською." },
+            { role: "user", content: aiPrompt }
           ],
-          max_tokens: 100,
-          temperature: 0.3,
+          max_tokens: 150,
+          temperature: 0.1,
         });
         
-        aiAnalysis = aiResponse.choices[0]?.message?.content || '';
-        if (aiAnalysis.length > 150) {
-          aiAnalysis = aiAnalysis.substring(0, 147) + '...';
+        const content = aiResponse.choices[0]?.message?.content || '';
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          aiDecision = JSON.parse(jsonMatch[0]);
         }
       } catch (e) {
         console.error("AI analysis error:", e);
-        aiAnalysis = `${dirText} сигнал: ${smc.confluence.breakdown.slice(0, 2).join(', ')}`;
       }
       
-      // Auto-confirm - no AI rejection
-      const aiDecision = {
-        trade: true,
-        pct: Math.min(90, Math.max(70, smc.confluence.total + 15)),
-        ua: aiAnalysis || `${dirText}: ${smc.confluence.breakdown.slice(0, 2).join(', ')}`
-      };
+      // If AI rejected or no valid response with strong signal - auto-approve strong signals only
+      if (!aiDecision || typeof aiDecision.trade !== 'boolean') {
+        if (smc.confluence.total >= 65) {
+          aiDecision = {
+            trade: true,
+            pct: Math.min(90, smc.confluence.total + 10),
+            ua: `${dirText}: ${smc.confluence.breakdown.slice(0, 3).join(', ')}`
+          };
+        } else {
+          return res.status(200).json({
+            noEntry: true,
+            analysis: `Очікуємо сильніший сигнал | Confluence: ${smc.confluence.total}%`,
+            pair,
+          });
+        }
+      }
+      
+      // AI rejected
+      if (!aiDecision.trade) {
+        return res.status(200).json({
+          noEntry: true,
+          analysis: aiDecision.ua || `AI не впевнений | ${smc.confluence.breakdown.slice(0, 2).join(', ')}`,
+          pair,
+        });
+      }
       
       // ========== CREATE SIGNAL ==========
       const sparkline = priceHistory.slice(-6);
