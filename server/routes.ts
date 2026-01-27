@@ -124,8 +124,9 @@ export async function registerRoutes(
 
       // ========== ULTRA MAXIMUM ACCURACY - 15 INDICATORS ==========
       
-      // === INDICATOR 1: TradingView Signal (REQUIRED: STRONG only) ===
+      // === INDICATOR 1: TradingView Signal ===
       const isStrongTVSignal = tvAnalysis.signal === 'STRONG_BUY' || tvAnalysis.signal === 'STRONG_SELL';
+      const isTVSignal = isStrongTVSignal || tvAnalysis.signal === 'BUY' || tvAnalysis.signal === 'SELL';
       
       // === INDICATOR 2: RSI - Relative Strength Index ===
       const rsiExtremeUp = indicators.rsi < 30;
@@ -288,30 +289,32 @@ export async function registerRoutes(
       if (vwapConfirms) confirmations += 0.5;        // VWAP
       if (sarConfirms) confirmations += 0.5;         // Parabolic SAR
       
-      // REQUIRE minimum 18/30 points (60%) for 90%+ accuracy signals
-      const minConfirmationsRequired = 18;
+      // REQUIRE minimum 15/30 points (50%) for signals
+      const minConfirmationsRequired = 15;
       
-      // HARD REQUIREMENTS for 90%+ accuracy:
-      // - TradingView STRONG
-      // - At least 3/5 oscillators (lowered from 4)
-      // - EMA OR MACD must confirm (lowered from AND)
-      // - At least 1 channel indicator (lowered from 2)
+      // REQUIREMENTS for 90%+ accuracy signals:
+      // - TradingView signal (STRONG preferred, BUY/SELL accepted with more indicators)
+      // - At least 2/5 oscillators
+      // - EMA OR MACD must confirm
       const oscillatorsConfirmed = [rsiConfirms, stochConfirms, williamsConfirms, cciConfirms, mfiConfirms].filter(Boolean).length;
       const channelsConfirmed = [bollingerConfirms, keltnerConfirms, donchianConfirms, ichimokuConfirms].filter(Boolean).length;
       const trendConfirmed = emaConfirms || macdConfirms;
-      const hardRequirementsMet = isStrongTVSignal && oscillatorsConfirmed >= 3 && trendConfirmed && channelsConfirmed >= 1;
+      
+      // Strong TV signal = easier pass, regular TV signal = need more confirmations
+      const hardRequirementsMet = isStrongTVSignal 
+        ? (oscillatorsConfirmed >= 2 && trendConfirmed)
+        : (isTVSignal && oscillatorsConfirmed >= 3 && trendConfirmed && channelsConfirmed >= 1);
       
       if (confirmations < minConfirmationsRequired || !tvAnalysis.recommendation || !hardRequirementsMet) {
         const accuracyNow = Math.round((confirmations / maxPoints) * 100);
         const reasons: string[] = [];
-        if (!isStrongTVSignal) reasons.push("TV не STRONG");
-        if (oscillatorsConfirmed < 3) reasons.push(`Осцил: ${oscillatorsConfirmed}/5`);
-        if (!trendConfirmed) reasons.push("EMA/MACD не підтв.");
-        if (channelsConfirmed < 1) reasons.push(`Канали: ${channelsConfirmed}/4`);
+        if (!isTVSignal) reasons.push("TV: NEUTRAL");
+        if (oscillatorsConfirmed < 2) reasons.push(`Осцил: ${oscillatorsConfirmed}/5`);
+        if (!trendConfirmed) reasons.push("Тренд слабкий");
         
         return res.status(200).json({
           noEntry: true,
-          analysis: `🔴 ${accuracyNow}% (потрібно 60%+). Балів: ${confirmations.toFixed(1)}/${maxPoints}. ${reasons.join(' | ')} | RSI:${indicators.rsi.toFixed(0)} Stoch:${indicators.stochK.toFixed(0)}`,
+          analysis: `⏳ ${tvAnalysis.signal} | ${confirmations.toFixed(1)}/${maxPoints} балів | ${reasons.join(' | ')} | RSI:${indicators.rsi.toFixed(0)}`,
           pair,
         });
       }

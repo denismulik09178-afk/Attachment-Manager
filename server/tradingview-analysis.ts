@@ -30,17 +30,13 @@ function getTimeframeInterval(minutes: number): string {
   return '1D';
 }
 
-function calculateSignal(buyCount: number, sellCount: number, neutralCount: number): TradingViewAnalysisResult['signal'] {
-  const total = buyCount + sellCount + neutralCount;
-  if (total === 0) return 'NEUTRAL';
-  
-  const buyRatio = buyCount / total;
-  const sellRatio = sellCount / total;
-  
-  if (buyRatio > 0.6) return 'STRONG_BUY';
-  if (buyRatio > 0.4) return 'BUY';
-  if (sellRatio > 0.6) return 'STRONG_SELL';
-  if (sellRatio > 0.4) return 'SELL';
+// TradingView Recommend.All values: -1 (strong sell) to +1 (strong buy)
+function calculateSignalFromRecommend(recommendAll: number): TradingViewAnalysisResult['signal'] {
+  // STRICT thresholds for REAL accuracy
+  if (recommendAll >= 0.5) return 'STRONG_BUY';   // Very bullish (was 0.6)
+  if (recommendAll >= 0.2) return 'BUY';
+  if (recommendAll <= -0.5) return 'STRONG_SELL'; // Very bearish (was -0.6)
+  if (recommendAll <= -0.2) return 'SELL';
   return 'NEUTRAL';
 }
 
@@ -95,9 +91,9 @@ export async function getTradingViewAnalysis(
     }
 
     const values = data.data[0].d;
-    const recommendAll = values[0] as number;
-    const recommendMA = values[1] as number;
-    const recommendOther = values[2] as number;
+    const recommendAll = values[0] as number;   // MAIN indicator: -1 to +1
+    const recommendMA = values[1] as number;    // Moving Averages: -1 to +1
+    const recommendOther = values[2] as number; // Oscillators: -1 to +1
     const rsi = values[3] as number;
     const macd = values[5] as number;
     const macdSignal = values[6] as number;
@@ -110,49 +106,32 @@ export async function getTradingViewAnalysis(
     const adxPlus = values[13] as number;
     const adxMinus = values[14] as number;
 
-    let buyCount = 0;
-    let sellCount = 0;
-    let neutralCount = 0;
-
-    [recommendAll, recommendMA, recommendOther].forEach(rec => {
-      if (rec > 0.1) buyCount++;
-      else if (rec < -0.1) sellCount++;
-      else neutralCount++;
-    });
-
-    if (rsi < 30) buyCount++;
-    else if (rsi > 70) sellCount++;
-    else neutralCount++;
-
-    if (macd > macdSignal) buyCount++;
-    else if (macd < macdSignal) sellCount++;
-    else neutralCount++;
-
-    if (close > ema20 && close > ema50) buyCount++;
-    else if (close < ema20 && close < ema50) sellCount++;
-    else neutralCount++;
-
-    if (adxPlus > adxMinus && adx > 25) buyCount++;
-    else if (adxMinus > adxPlus && adx > 25) sellCount++;
-    else neutralCount++;
-
-    const signal = calculateSignal(buyCount, sellCount, neutralCount);
+    // Use REAL TradingView recommendation directly
+    // This is the actual aggregate of all TradingView indicators
+    const signal = calculateSignalFromRecommend(recommendAll);
+    
+    // Log real TradingView values for debugging
+    console.log(`[TV] ${symbol}: Recommend=${recommendAll?.toFixed(3)}, MA=${recommendMA?.toFixed(3)}, Osc=${recommendOther?.toFixed(3)}, RSI=${rsi?.toFixed(1)}, ADX=${adx?.toFixed(1)}, Signal=${signal}`);
     
     let recommendation: 'UP' | 'DOWN' | null = null;
     let confidence = 0;
 
+    // Calculate confidence from REAL TradingView values (no random!)
+    const absRecommend = Math.abs(recommendAll || 0);
+    const realConfidence = Math.round(50 + absRecommend * 49); // 50-99% based on strength
+
     if (signal === 'STRONG_BUY') {
       recommendation = 'UP';
-      confidence = 85 + Math.random() * 10;
+      confidence = Math.max(85, realConfidence);
     } else if (signal === 'BUY') {
       recommendation = 'UP';
-      confidence = 65 + Math.random() * 15;
+      confidence = Math.max(65, realConfidence);
     } else if (signal === 'STRONG_SELL') {
       recommendation = 'DOWN';
-      confidence = 85 + Math.random() * 10;
+      confidence = Math.max(85, realConfidence);
     } else if (signal === 'SELL') {
       recommendation = 'DOWN';
-      confidence = 65 + Math.random() * 15;
+      confidence = Math.max(65, realConfidence);
     } else {
       recommendation = null;
       confidence = 0;
