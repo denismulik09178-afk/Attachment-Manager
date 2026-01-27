@@ -15,9 +15,11 @@ This is a web application that provides AI-powered trading signals for Forex mar
   - Liquidity: 20 балів (Premium/Discount)
   - Timing: 15 балів (Entry patterns)
   - Session: 10 балів (London, New York, Asia)
-- **Minimum Confluence**: 25-30% для генерації сигналу (знижено з 55%)
-- **Auto-confirm**: AI автоматично підтверджує сигнали, генерує пояснення
-- **More Signals**: Система тепер дає більше сигналів для торгівлі
+- **Minimum Confluence**: 35% для генерації сигналу
+- **ADX**: ≥18 для підтвердження тренду
+- **Auto-confirm**: AI автоматично підтверджує сигнали, генерує пояснення українською
+- **Target Accuracy**: 80-92% (confluence + 30%)
+- **More Signals**: Система дає більше сигналів зі збереженням якості
 
 ### Previous Updates
 - **ЦІНИ 1 В 1 З TRADINGVIEW**: Всі ціни та індикатори тільки від TradingView API

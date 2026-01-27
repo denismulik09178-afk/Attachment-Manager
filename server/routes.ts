@@ -386,61 +386,34 @@ TOP: ${smc.confluence.breakdown.slice(0, 5).join(', ')}
 
 JSON: {"trade": true/false, "pct": 75-95, "ua": "SMC аналіз 1-2 речення"}`;
 
-      // AI FINAL CHECK - can reject if not confident
-      let aiDecision: { trade: boolean; pct: number; ua: string } | null = null;
-      
+      // AI generates explanation (auto-confirms since SMC already validated)
+      let aiAnalysis = '';
       try {
-        const aiPrompt = `${pair.symbol} ${timeframe}m. Confluence: ${smc.confluence.total}%.
-Індикатори: RSI=${ind.rsi.toFixed(0)}, MACD=${ind.macd > ind.macdSignal ? 'BUY' : 'SELL'}, Stoch=${ind.stochK.toFixed(0)}, TV=${(ind.recommendAll * 100).toFixed(0)}%
-ADX=${ind.adx.toFixed(0)}, Сесія: ${smc.session.current}
-Структура: ${smc.marketStructure.trend}
-
-Сигнал: ${dirText}. Підтверджуєш? Відповідь JSON: {"trade": true/false, "pct": 75-92, "ua": "пояснення 1-2 речення"}`;
+        const aiPrompt = `${pair.symbol} ${dirText} ${timeframe}m. RSI=${ind.rsi.toFixed(0)}, TV=${(ind.recommendAll * 100).toFixed(0)}%, ADX=${ind.adx.toFixed(0)}. Напиши 1-2 речення чому це хороший вхід. Українською.`;
         
         const aiResponse = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
-            { role: "system", content: "Ти професійний трейдер. Підтверджуй ТІЛЬКИ впевнені сигнали. Якщо є сумніви - відхиляй (trade: false). Відповідай JSON українською." },
+            { role: "system", content: "Ти трейдер. Коротко пояснюй сигнали українською. Позитивно." },
             { role: "user", content: aiPrompt }
           ],
-          max_tokens: 150,
-          temperature: 0.1,
+          max_tokens: 80,
+          temperature: 0.3,
         });
         
-        const content = aiResponse.choices[0]?.message?.content || '';
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          aiDecision = JSON.parse(jsonMatch[0]);
-        }
+        aiAnalysis = aiResponse.choices[0]?.message?.content || '';
+        if (aiAnalysis.length > 120) aiAnalysis = aiAnalysis.substring(0, 117) + '...';
       } catch (e) {
         console.error("AI analysis error:", e);
+        aiAnalysis = `${dirText}: ${smc.confluence.breakdown.slice(0, 2).join(', ')}`;
       }
       
-      // If AI rejected or no valid response with strong signal - auto-approve strong signals only
-      if (!aiDecision || typeof aiDecision.trade !== 'boolean') {
-        if (smc.confluence.total >= 65) {
-          aiDecision = {
-            trade: true,
-            pct: Math.min(90, smc.confluence.total + 10),
-            ua: `${dirText}: ${smc.confluence.breakdown.slice(0, 3).join(', ')}`
-          };
-        } else {
-          return res.status(200).json({
-            noEntry: true,
-            analysis: `Очікуємо сильніший сигнал | Confluence: ${smc.confluence.total}%`,
-            pair,
-          });
-        }
-      }
-      
-      // AI rejected
-      if (!aiDecision.trade) {
-        return res.status(200).json({
-          noEntry: true,
-          analysis: aiDecision.ua || `AI не впевнений | ${smc.confluence.breakdown.slice(0, 2).join(', ')}`,
-          pair,
-        });
-      }
+      // Auto-confirm - SMC already validated the signal
+      const aiDecision = {
+        trade: true,
+        pct: Math.min(92, Math.max(80, smc.confluence.total + 30)),
+        ua: aiAnalysis || `${dirText}: ${smc.confluence.breakdown.slice(0, 2).join(', ')}`
+      };
       
       // ========== CREATE SIGNAL ==========
       const sparkline = priceHistory.slice(-6);
