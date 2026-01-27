@@ -470,18 +470,31 @@ JSON: {"trade": true/false, "pct": 75-95, "ua": "SMC аналіз 1-2 речен
       let newPrice: number;
 
       if (pair) {
-        // Отримуємо ціну ТІЛЬКИ від TradingView (1 в 1 з індикаторами)
-        const tvAnalysis = await getTradingViewAnalysis(pair.symbol, 5);
-        const tvClose = tvAnalysis.indicators.close;
-        
-        if (tvClose) {
-          newPrice = tvClose;
-          // Логування для перевірки - ціна точно з TV
-          console.log(`[PRICE UPDATE] ${pair.symbol}: TV close=${tvClose.toFixed(5)}`);
-        } else {
-          // Fallback: залишаємо поточну ціну без змін
+        // SIMPLE price fetch - only close price
+        try {
+          const pairCode = pair.symbol.replace('/', '');
+          const response = await fetch('https://scanner.tradingview.com/forex/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              symbols: { tickers: [`FX:${pairCode}`], query: { types: [] } },
+              columns: ['close']
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.data?.[0]?.d?.[0]) {
+              newPrice = data.data[0].d[0];
+              console.log(`[PRICE] ${pair.symbol}: ${newPrice.toFixed(5)}`);
+            } else {
+              newPrice = parseFloat(signal.currentPrice || signal.openPrice);
+            }
+          } else {
+            newPrice = parseFloat(signal.currentPrice || signal.openPrice);
+          }
+        } catch {
           newPrice = parseFloat(signal.currentPrice || signal.openPrice);
-          console.log(`[PRICE UPDATE] ${pair.symbol}: TV unavailable, keeping ${newPrice}`);
         }
       } else {
         newPrice = parseFloat(signal.currentPrice || signal.openPrice);
@@ -505,21 +518,54 @@ JSON: {"trade": true/false, "pct": 75-95, "ua": "SMC аналіз 1-2 речен
         return res.status(404).json({ message: "Signal not found" });
       }
 
-      const openPrice = parseFloat(signal.openPrice);
-      const closePrice = parseFloat(signal.currentPrice || signal.openPrice);
+      // Get fresh close price from TradingView
+      const signalPair = await storage.getPair(signal.pairId);
+      let closePrice = parseFloat(signal.currentPrice || signal.openPrice);
       
+      if (signalPair) {
+        try {
+          const pairCode = signalPair.symbol.replace('/', '');
+          const response = await fetch('https://scanner.tradingview.com/forex/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              symbols: { tickers: [`FX:${pairCode}`], query: { types: [] } },
+              columns: ['close']
+            })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.data?.[0]?.d?.[0]) {
+              closePrice = data.data[0].d[0];
+              console.log(`[CLOSE] ${signalPair.symbol}: ${closePrice.toFixed(5)}`);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to fetch close price:', e);
+        }
+      }
+
+      const openPrice = parseFloat(signal.openPrice);
+      
+      // Calculate pip difference (JPY pairs use 0.01, others use 0.0001)
+      const isJpy = signalPair?.symbol?.includes('JPY');
+      const pipSize = isJpy ? 0.01 : 0.0001;
+      const priceDiff = closePrice - openPrice;
+      const pipDiff = priceDiff / pipSize;
+      
+      // WIN/LOSE based on direction, DRAW only if price exactly the same
       let result: 'WIN' | 'LOSE' | 'DRAW';
       if (signal.direction === 'UP') {
-        result = closePrice > openPrice ? 'WIN' : closePrice < openPrice ? 'LOSE' : 'DRAW';
+        result = pipDiff > 0.1 ? 'WIN' : pipDiff < -0.1 ? 'LOSE' : 'DRAW';
       } else {
-        result = closePrice < openPrice ? 'WIN' : closePrice > openPrice ? 'LOSE' : 'DRAW';
+        result = pipDiff < -0.1 ? 'WIN' : pipDiff > 0.1 ? 'LOSE' : 'DRAW';
       }
       
-      const updated = await storage.closeSignal(signalId, closePrice.toFixed(5), result);
+      console.log(`[RESULT] ${signalPair?.symbol}: Open=${openPrice.toFixed(5)} Close=${closePrice.toFixed(5)} Pips=${pipDiff.toFixed(2)} Dir=${signal.direction} => ${result}`);
       
-      // Enrich with pair
-      const pair = await storage.getPair(signal.pairId);
-      res.json({ ...updated, pair });
+      const updated = await storage.closeSignal(signalId, closePrice.toFixed(5), result);
+      res.json({ ...updated, pair: signalPair });
     } catch (err) {
       console.error("Close signal error:", err);
       res.status(500).json({ message: "Failed to close signal" });
