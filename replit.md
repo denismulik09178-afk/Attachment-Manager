@@ -6,23 +6,18 @@ This is a web application that provides AI-powered trading signals for Forex mar
 
 ## Recent Changes (January 2026)
 
-### Smart Money Concepts (SMC) Integration
-- **SMC Analysis Module**: `server/smc-analysis.ts` - повний модуль для аналізу Smart Money Concepts
-- **Market Structure**: Визначення HH/HL/LH/LL, BOS (Break of Structure), CHOCH (Change of Character)
-- **Liquidity Zones**: FVG (Fair Value Gap), Premium/Discount зони, Liquidity Sweeps
-- **Confluence Scoring**: 100-бальна система оцінки:
+### Simplified Signal Generation System (January 27, 2026)
+- **SMC Analysis Module**: `server/smc-analysis.ts` - спрощений модуль аналізу
+- **Direction Logic**: 2+ з 4 індикаторів (TV Recommend, MACD, RSI, Stoch) для напрямку
+- **Confluence Scoring**: 100-бальна система оцінки (спрощена):
   - Indicators: 30 балів (RSI, MACD, Stoch, CCI, TV Recommend)
-  - Structure: 25 балів (BOS/CHOCH, тренд, свінги)
-  - Liquidity: 20 балів (FVG, Premium/Discount, Sweep)
-  - Timing: 15 балів (Entry patterns: Break+Retest, Impulse→Pullback)
+  - Structure: 25 балів (тренд)
+  - Liquidity: 20 балів (Premium/Discount)
+  - Timing: 15 балів (Entry patterns)
   - Session: 10 балів (London, New York, Asia)
-- **Strict Filters** (всі мають пройти):
-  - ADX >= 22 (сильний тренд)
-  - Active Session (London/NY/Asia)
-  - HTF Trend Alignment (EMA200 підтверджує)
-  - No Ranging Market (ADX не флет)
-- **Minimum Confluence**: 55% для генерації сигналу
-- **Target Accuracy**: 80-85% через багатошарову фільтрацію
+- **Minimum Confluence**: 25-30% для генерації сигналу (знижено з 55%)
+- **Auto-confirm**: AI автоматично підтверджує сигнали, генерує пояснення
+- **More Signals**: Система тепер дає більше сигналів для торгівлі
 
 ### Previous Updates
 - **ЦІНИ 1 В 1 З TRADINGVIEW**: Всі ціни та індикатори тільки від TradingView API

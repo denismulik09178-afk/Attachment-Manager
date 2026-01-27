@@ -329,41 +329,23 @@ export async function registerRoutes(
       }
       priceHistory.push(currentPrice);
       
-      // ========== SMC-BASED STRICT FILTERS ==========
+      // ========== SIMPLIFIED FILTERS ==========
       
-      // FILTER 1: Must pass all SMC filters
-      if (!smc.filters.allFiltersPassed) {
-        return res.status(200).json({
-          noEntry: true,
-          analysis: `ФІЛЬТРИ: ${smc.filters.filterDescription}`,
-          pair,
-        });
-      }
-      
-      // FILTER 2: Confluence score minimum 55%
-      const MIN_CONFLUENCE = 55;
-      if (smc.confluence.total < MIN_CONFLUENCE) {
-        return res.status(200).json({
-          noEntry: true,
-          analysis: `Confluence ${smc.confluence.total}% < ${MIN_CONFLUENCE}% | ${smc.confluence.breakdown.slice(0, 3).join(', ')}`,
-          pair,
-        });
-      }
-      
-      // FILTER 3: Must have clear direction
+      // FILTER 1: Must have clear direction
       if (!smc.finalDirection) {
         return res.status(200).json({
           noEntry: true,
-          analysis: smc.skipReason || `Немає чіткого напрямку | Confluence: ${smc.confluence.total}%`,
+          analysis: smc.skipReason || `Немає чіткого напрямку`,
           pair,
         });
       }
       
-      // FILTER 4: Session must be active (not Asia or off-hours for major moves)
-      if (!smc.session.isActive || smc.session.current === 'OFF_HOURS') {
+      // FILTER 2: Basic confluence check (lowered from 55% to 30%)
+      const MIN_CONFLUENCE = 30;
+      if (smc.confluence.total < MIN_CONFLUENCE) {
         return res.status(200).json({
           noEntry: true,
-          analysis: `Сесія: ${smc.session.description} | Рекомендуємо London/NY`,
+          analysis: `Слабкий сигнал ${smc.confluence.total}% | ${smc.confluence.breakdown.slice(0, 2).join(', ')}`,
           pair,
         });
       }
@@ -414,64 +396,38 @@ TOP: ${smc.confluence.breakdown.slice(0, 5).join(', ')}
 
 JSON: {"trade": true/false, "pct": 75-95, "ua": "SMC аналіз 1-2 речення"}`;
 
-      let aiDecision;
+      // SIMPLIFIED: Auto-approve signals, just generate explanation
+      let aiAnalysis = '';
       try {
+        const simplePrompt = `${pair.symbol} ${timeframe}m ${dirText}. Confluence: ${smc.confluence.total}%. Напиши 1-2 речення чому це хороший вхід. RSI=${ind.rsi.toFixed(0)}, TV=${(ind.recommendAll * 100).toFixed(0)}%. Українською.`;
+        
         const aiResponse = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt }
+            { role: "system", content: "Ти трейдер. Коротко пояснюй сигнали українською." },
+            { role: "user", content: simplePrompt }
           ],
-          max_tokens: 250,
-          temperature: 0.12,
+          max_tokens: 100,
+          temperature: 0.3,
         });
         
-        const content = aiResponse.choices[0]?.message?.content || "";
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          aiDecision = JSON.parse(jsonMatch[0]);
+        aiAnalysis = aiResponse.choices[0]?.message?.content || '';
+        if (aiAnalysis.length > 150) {
+          aiAnalysis = aiAnalysis.substring(0, 147) + '...';
         }
       } catch (e) {
-        console.error("AI SMC analysis error:", e);
+        console.error("AI analysis error:", e);
+        aiAnalysis = `${dirText} сигнал: ${smc.confluence.breakdown.slice(0, 2).join(', ')}`;
       }
       
-      // Validate AI response
-      const isValidAI = aiDecision && 
-        typeof aiDecision.trade === 'boolean' && 
-        typeof aiDecision.ua === 'string' &&
-        aiDecision.ua.length > 10;
+      // Auto-confirm - no AI rejection
+      const aiDecision = {
+        trade: true,
+        pct: Math.min(90, Math.max(70, smc.confluence.total + 15)),
+        ua: aiAnalysis || `${dirText}: ${smc.confluence.breakdown.slice(0, 2).join(', ')}`
+      };
       
-      if (isValidAI && aiDecision.ua.length > 250) {
-        aiDecision.ua = aiDecision.ua.substring(0, 247) + '...';
-      }
-      
-      // Fallback for invalid AI response - use SMC score directly
-      if (!isValidAI) {
-        const veryStrong = smc.confluence.total >= 70;
-        if (!veryStrong) {
-          return res.status(200).json({
-            noEntry: true,
-            analysis: `Очікуємо AI підтвердження | Confluence: ${smc.confluence.total}%`,
-            pair,
-          });
-        }
-        aiDecision = {
-          trade: true,
-          pct: Math.min(92, smc.confluence.total),
-          ua: `SMC ${dirText}: Confluence ${smc.confluence.total}%. ${smc.marketStructure.structureDescription}`
-        };
-      }
-      
-      // AI rejected
-      if (!aiDecision.trade) {
-        return res.status(200).json({
-          noEntry: true,
-          analysis: aiDecision.ua || `AI відхилив | Confluence: ${smc.confluence.total}%`,
-          pair,
-        });
-      }
-      
-      // ========== AI CONFIRMED - CREATE SIGNAL ==========
+      // ========== CREATE SIGNAL ==========
       const sparkline = priceHistory.slice(-6);
       const confidence = Math.max(75, Math.min(95, aiDecision.pct || smc.confluence.total));
       

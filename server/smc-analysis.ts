@@ -549,12 +549,7 @@ function calculateConfluence(
   else if (session.current === 'LONDON' || session.current === 'NEW_YORK') { sessionScore += 7; breakdown.push(`${session.current} сесія`); }
   else if (session.current === 'ASIA') { sessionScore += 3; breakdown.push('Asia сесія'); }
   
-  // Penalties
-  if (!filters.allFiltersPassed) {
-    const penalty = 15;
-    indicatorScore = Math.max(0, indicatorScore - penalty);
-    breakdown.push(`Фільтри -${penalty}`);
-  }
+  // No penalties - simplified system
   
   const total = Math.min(100, Math.max(0, indicatorScore + structureScore + liquidityScore + timingScore + sessionScore));
   
@@ -689,10 +684,20 @@ export async function getSMCAnalysis(
       prevHigh, prevLow
     );
     
-    // Determine initial direction
+    // Determine initial direction (SIMPLIFIED - lower thresholds)
     let initialDirection: 'UP' | 'DOWN' | null = null;
-    if (indicators.recommendAll >= 0.25) initialDirection = 'UP';
-    else if (indicators.recommendAll <= -0.25) initialDirection = 'DOWN';
+    // Use combination of indicators for direction
+    const bullishSignals = (indicators.recommendAll > 0 ? 1 : 0) +
+                           (indicators.macd > indicators.macdSignal ? 1 : 0) +
+                           (indicators.rsi > 50 ? 1 : 0) +
+                           (indicators.stochK > indicators.stochD ? 1 : 0);
+    const bearishSignals = (indicators.recommendAll < 0 ? 1 : 0) +
+                           (indicators.macd < indicators.macdSignal ? 1 : 0) +
+                           (indicators.rsi < 50 ? 1 : 0) +
+                           (indicators.stochK < indicators.stochD ? 1 : 0);
+    
+    if (bullishSignals >= 2) initialDirection = 'UP';
+    else if (bearishSignals >= 2) initialDirection = 'DOWN';
     
     // HTF Bias (simplified - use structure trend)
     const htfBias = marketStructure.trend === 'BULLISH' ? 'BULLISH' : 
@@ -716,18 +721,16 @@ export async function getSMCAnalysis(
       indicators, marketStructure, liquidity, entryTiming, session, filters, initialDirection
     );
     
-    // Final decision
-    const MIN_CONFLUENCE = 55; // Minimum confluence score for trade
-    const shouldTrade = confluence.total >= MIN_CONFLUENCE && filters.allFiltersPassed && initialDirection !== null;
+    // Final decision (SIMPLIFIED - only require direction and basic confluence)
+    const MIN_CONFLUENCE = 25; // Lowered from 55 to allow more signals
+    const shouldTrade = initialDirection !== null && confluence.total >= MIN_CONFLUENCE;
     
     let skipReason: string | null = null;
     if (!shouldTrade) {
-      if (confluence.total < MIN_CONFLUENCE) {
-        skipReason = `Confluence ${confluence.total}% < ${MIN_CONFLUENCE}% мінімум`;
-      } else if (!filters.allFiltersPassed) {
-        skipReason = filters.filterDescription;
-      } else if (!initialDirection) {
+      if (!initialDirection) {
         skipReason = 'Немає чіткого напрямку';
+      } else if (confluence.total < MIN_CONFLUENCE) {
+        skipReason = `Слабкий сигнал ${confluence.total}%`;
       }
     }
     
