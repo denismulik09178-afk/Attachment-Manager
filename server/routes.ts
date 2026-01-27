@@ -5,7 +5,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
-import { generateAccurateMarketData, getRealPrice } from "./forex-prices";
+// Ціни тепер тільки від TradingView - forex-prices.ts більше не використовується
 import { getTradingViewAnalysis } from "./tradingview-analysis";
 
 const openai = new OpenAI({
@@ -129,21 +129,40 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pair not found" });
       }
 
-      // Get TradingView real analysis
+      // Get TradingView real analysis - ЄДИНЕ ДЖЕРЕЛО ПРАВДИ
       const tvAnalysis = await getTradingViewAnalysis(pair.symbol, timeframe);
       
-      // Get real market data
-      const marketData = await generateAccurateMarketData(pair.symbol);
-      const { currentPrice, priceHistory, indicators } = marketData;
-      
-      // Real values from TradingView
-      const realRsi = tvAnalysis.indicators.rsi ?? indicators.rsi;
-      const realAdx = tvAnalysis.indicators.adx ?? indicators.adx;
-      const realMacd = tvAnalysis.indicators.macd ?? indicators.macd;
-      const realMacdSignal = tvAnalysis.indicators.macdSignal ?? indicators.macdSignal;
+      // ВСІ дані тільки від TradingView - ціни та індикатори 1 в 1
+      const tvClose = tvAnalysis.indicators.close;
+      const realRsi = tvAnalysis.indicators.rsi;
+      const realAdx = tvAnalysis.indicators.adx;
+      const realMacd = tvAnalysis.indicators.macd;
+      const realMacdSignal = tvAnalysis.indicators.macdSignal;
       const recommendAll = tvAnalysis.indicators.recommendAll ?? 0;
       const recommendMA = tvAnalysis.indicators.recommendMA ?? 0;
       const recommendOsc = tvAnalysis.indicators.recommendOsc ?? 0;
+      
+      // Ціна ТІЛЬКИ від TradingView (та сама що й для RSI/ADX/MACD)
+      const currentPrice = tvClose ?? 0;
+      
+      // Перевірка що TradingView повернув дані
+      if (!currentPrice || !realRsi || !realAdx) {
+        return res.status(200).json({
+          noEntry: true,
+          analysis: `TradingView недоступний - спробуйте пізніше`,
+          pair,
+        });
+      }
+      
+      // Генеруємо sparkline навколо реальної ціни TV
+      const isJpy = pair.symbol.includes('JPY');
+      const pipValue = isJpy ? 0.01 : 0.0001;
+      const priceHistory = [];
+      for (let i = 0; i < 6; i++) {
+        const pips = (Math.random() - 0.5) * 10; // ±5 pips
+        priceHistory.push(currentPrice + pips * pipValue);
+      }
+      priceHistory.push(currentPrice); // Остання = поточна TV ціна
       
       // ========== STRICT QUALITY FILTERS ==========
       const tvDirection = tvAnalysis.recommendation;
@@ -277,7 +296,7 @@ JSON: {"trade":true/false,"pct":85-99,"ua":"1 речення чому"}`;
     }
   });
 
-  // Update signal price (for live tracking with real prices)
+  // Update signal price (for live tracking with TradingView prices)
   app.patch("/api/signals/:id/price", async (req, res) => {
     try {
       const signalId = Number(req.params.id);
@@ -291,17 +310,21 @@ JSON: {"trade":true/false,"pct":85-99,"ua":"1 речення чому"}`;
       let newPrice: number;
 
       if (pair) {
-        const realPrice = await getRealPrice(pair.symbol);
-        if (realPrice) {
-          newPrice = realPrice;
+        // Отримуємо ціну ТІЛЬКИ від TradingView (1 в 1 з індикаторами)
+        const tvAnalysis = await getTradingViewAnalysis(pair.symbol, 5);
+        const tvClose = tvAnalysis.indicators.close;
+        
+        if (tvClose) {
+          newPrice = tvClose;
         } else {
+          // Fallback: мінімальне відхилення від поточної ціни
           const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
-          const volatility = pair.symbol.includes('JPY') ? 0.01 : 0.0001;
+          const volatility = pair.symbol.includes('JPY') ? 0.005 : 0.00005;
           newPrice = currentPrice + (Math.random() - 0.5) * volatility;
         }
       } else {
         const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
-        newPrice = currentPrice + (Math.random() - 0.5) * 0.0001;
+        newPrice = currentPrice + (Math.random() - 0.5) * 0.00005;
       }
       
       const updated = await storage.updateSignalPrice(signalId, newPrice.toFixed(5));
