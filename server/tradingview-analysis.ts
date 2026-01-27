@@ -40,11 +40,11 @@ function getTimeframeInterval(minutes: number): string {
 
 // TradingView Recommend.All values: -1 (strong sell) to +1 (strong buy)
 function calculateSignalFromRecommend(recommendAll: number): TradingViewAnalysisResult['signal'] {
-  // STRICT thresholds for REAL accuracy
-  if (recommendAll >= 0.5) return 'STRONG_BUY';   // Very bullish (was 0.6)
-  if (recommendAll >= 0.2) return 'BUY';
-  if (recommendAll <= -0.5) return 'STRONG_SELL'; // Very bearish (was -0.6)
-  if (recommendAll <= -0.2) return 'SELL';
+  // ULTRA STRICT thresholds for MAXIMUM accuracy
+  if (recommendAll >= 0.55) return 'STRONG_BUY';   // Very bullish - STRICTER
+  if (recommendAll >= 0.25) return 'BUY';          // Bullish - STRICTER
+  if (recommendAll <= -0.55) return 'STRONG_SELL'; // Very bearish - STRICTER
+  if (recommendAll <= -0.25) return 'SELL';        // Bearish - STRICTER
   return 'NEUTRAL';
 }
 
