@@ -185,34 +185,37 @@ export async function registerRoutes(
       const adxState = realAdx > 25 ? 'СИЛЬНИЙ ТРЕНД' : realAdx > 20 ? 'СЕРЕДНІЙ ТРЕНД' : 'СЛАБКИЙ ТРЕНД';
       const macdState = (realMacd ?? 0) > (realMacdSignal ?? 0) ? 'БИЧАЧИЙ' : 'ВЕДМЕЖИЙ';
       
-      const aiTraderPrompt = `Ти професійний трейдер з 25 роками досвіду. Оціни чи варто входити в угоду на ${pair.symbol}.
+      // Calculate additional context for AI
+      const priceVsBollingerUpper = ((currentPrice - indicators.bollingerUpper) / indicators.bollingerUpper * 100).toFixed(2);
+      const priceVsBollingerLower = ((currentPrice - indicators.bollingerLower) / indicators.bollingerLower * 100).toFixed(2);
+      const macdHistogram = ((realMacd ?? 0) - (realMacdSignal ?? 0));
+      const macdCrossing = Math.abs(macdHistogram) < 0.0001 ? 'ПЕРЕТИН' : macdHistogram > 0 ? 'ВИЩЕ СИГНАЛЬНОЇ' : 'НИЖЧЕ СИГНАЛЬНОЇ';
+      
+      const aiTraderPrompt = `Ти елітний Forex трейдер. Дай КОНКРЕТНИЙ аналіз для ${pair.symbol} (${timeframe}хв).
 
-ДАНІ З TRADINGVIEW:
-- Recommend.All: ${recommendAll.toFixed(3)} (${tvDirection})
-- Recommend.MA: ${recommendMA.toFixed(3)}
-- Recommend.Osc: ${recommendOsc.toFixed(3)}
-- Поточна ціна: ${currentPrice.toFixed(5)}
+РИНОК:
+Ціна: ${currentPrice.toFixed(5)}
+TradingView: ${tvDirection} (сила ${(Math.abs(recommendAll) * 100).toFixed(0)}%)
+MA сигнал: ${recommendMA > 0 ? 'BUY' : recommendMA < 0 ? 'SELL' : 'NEUTRAL'} (${recommendMA.toFixed(2)})
+Осцилятори: ${recommendOsc > 0 ? 'BUY' : recommendOsc < 0 ? 'SELL' : 'NEUTRAL'} (${recommendOsc.toFixed(2)})
 
 ІНДИКАТОРИ:
-- RSI(14): ${realRsi.toFixed(1)} (${rsiState})
-- ADX: ${realAdx.toFixed(1)} (${adxState})
-- MACD: ${macdState}
-- Bollinger: ${indicators.bollingerLower.toFixed(5)} - ${indicators.bollingerUpper.toFixed(5)}
+RSI: ${realRsi.toFixed(1)} ${realRsi < 30 ? '- зона перепроданості, можливий розворот вгору' : realRsi > 70 ? '- зона перекупленості, можливий розворот вниз' : realRsi < 45 ? '- слабкий імпульс' : realRsi > 55 ? '- сильний імпульс' : '- нейтрально'}
+ADX: ${realAdx.toFixed(1)} ${realAdx > 30 ? '- потужний тренд' : realAdx > 25 ? '- стабільний тренд' : realAdx > 20 ? '- формується тренд' : '- флет'}
+MACD: ${macdCrossing}, гістограма ${macdHistogram > 0 ? '+' : ''}${macdHistogram.toFixed(5)}
+Bollinger: ціна ${parseFloat(priceVsBollingerUpper) > 0 ? 'вище верхньої межі на ' + priceVsBollingerUpper + '%' : parseFloat(priceVsBollingerLower) < 0 ? 'нижче нижньої межі на ' + Math.abs(parseFloat(priceVsBollingerLower)) + '%' : 'всередині каналу'}
 
-TradingView рекомендує: ${tvDirection}
+Напиши як справжній трейдер: конкретні цифри, чому саме зараз ${tvDirection}, який ризик. Без води.
 
-Оціни якість цього сигналу. Якщо всі фактори підтверджують напрямок - рекомендуй вхід. Якщо є суперечності - рекомендуй почекати.
-
-Відповідь тільки JSON:
-{"trade":true/false,"confidence":85-99,"analysis":"2-3 речення українською чому входити або чекати"}`;
+JSON: {"trade":true/false,"confidence":85-99,"analysis":"Твій аналіз українською"}`;
 
       let aiDecision;
       try {
         const aiResponse = await openai.chat.completions.create({
           model: "gpt-4o-mini",
           messages: [{ role: "user", content: aiTraderPrompt }],
-          max_tokens: 400,
-          temperature: 0.3,
+          max_tokens: 500,
+          temperature: 0.4,
         });
         
         const content = aiResponse.choices[0]?.message?.content || "";
