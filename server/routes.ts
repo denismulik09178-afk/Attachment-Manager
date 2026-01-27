@@ -105,7 +105,18 @@ export async function registerRoutes(
   // AI Signal Generation with TradingView + AI Combined Analysis (80%+ accuracy)
   app.post("/api/signals/generate", async (req, res) => {
     try {
-      const { pairId, timeframe } = req.body;
+      const { pairId, timeframe: timeframeStr } = req.body;
+      
+      // Convert timeframe string to minutes (e.g., "5m" -> 5, "1h" -> 60)
+      const parseTimeframe = (tf: string): number => {
+        if (!tf || typeof tf !== 'string') return 5; // default 5 minutes
+        const match = tf.match(/^(\d+)(m|h)?$/i);
+        if (!match) return 5;
+        const value = parseInt(match[1], 10);
+        const unit = match[2]?.toLowerCase() || 'm';
+        return unit === 'h' ? value * 60 : value;
+      };
+      const timeframe = parseTimeframe(timeframeStr);
       
       // Get session ID from header for browser-based isolation
       const ownerId = req.headers['x-session-id'] as string;
@@ -129,23 +140,39 @@ export async function registerRoutes(
       const isTVSignal = isStrongTVSignal || tvAnalysis.signal === 'BUY' || tvAnalysis.signal === 'SELL';
       
       // === INDICATOR 2: RSI - Relative Strength Index ===
+      // Use TradingView's real RSI if available
+      const tvRsi = tvAnalysis.indicators.rsi;
+      const realRsi = tvRsi !== undefined ? tvRsi : indicators.rsi;
       // More lenient: <50 for UP (bullish zone), >50 for DOWN (bearish zone)
-      const rsiForUp = indicators.rsi < 50;
-      const rsiForDown = indicators.rsi > 50;
+      const rsiForUp = realRsi < 50;
+      const rsiForDown = realRsi > 50;
       const rsiConfirms = (tvAnalysis.recommendation === 'UP' && rsiForUp) || 
                           (tvAnalysis.recommendation === 'DOWN' && rsiForDown);
       
-      // === INDICATOR 3: MACD - Moving Average Convergence Divergence ===
-      const macdConfirmsUp = indicators.macd > indicators.macdSignal && indicators.macdHistogram > 0;
-      const macdConfirmsDown = indicators.macd < indicators.macdSignal && indicators.macdHistogram < 0;
+      // === INDICATOR 3: MACD - Using TradingView REAL data ===
+      // Use TradingView's MACD values if available, otherwise fallback to simulated
+      const tvMacd = tvAnalysis.indicators.macd;
+      const tvMacdSignal = tvAnalysis.indicators.macdSignal;
+      const useTvMacd = tvMacd !== undefined && tvMacdSignal !== undefined;
+      const macdConfirmsUp = useTvMacd 
+        ? (tvMacd > tvMacdSignal)
+        : (indicators.macd > indicators.macdSignal && indicators.macdHistogram > 0);
+      const macdConfirmsDown = useTvMacd 
+        ? (tvMacd < tvMacdSignal)
+        : (indicators.macd < indicators.macdSignal && indicators.macdHistogram < 0);
       const macdConfirms = (tvAnalysis.recommendation === 'UP' && macdConfirmsUp) ||
                            (tvAnalysis.recommendation === 'DOWN' && macdConfirmsDown);
       
-      // === INDICATOR 4: EMA Alignment (all 4 EMAs) ===
-      const emaFullBullish = indicators.ema9 > indicators.ema21 && indicators.ema21 > indicators.ema50 && currentPrice > indicators.ema200;
-      const emaFullBearish = indicators.ema9 < indicators.ema21 && indicators.ema21 < indicators.ema50 && currentPrice < indicators.ema200;
-      const emaConfirms = (tvAnalysis.recommendation === 'UP' && emaFullBullish) ||
-                          (tvAnalysis.recommendation === 'DOWN' && emaFullBearish);
+      // === INDICATOR 4: EMA/MA Trend - Using TradingView's MA recommendation ===
+      // TradingView's recommendMA is the aggregated MA signal (-1 to +1)
+      // If recommendMA > 0.1 = bullish MAs, < -0.1 = bearish MAs
+      const tvRecommendMA = tvAnalysis.indicators.recommendMA;
+      const useTvMA = tvRecommendMA !== undefined;
+      const emaConfirms = useTvMA
+        ? ((tvAnalysis.recommendation === 'UP' && tvRecommendMA > 0.1) ||
+           (tvAnalysis.recommendation === 'DOWN' && tvRecommendMA < -0.1))
+        : ((tvAnalysis.recommendation === 'UP' && indicators.ema9 > indicators.ema21) ||
+           (tvAnalysis.recommendation === 'DOWN' && indicators.ema9 < indicators.ema21));
       
       // === INDICATOR 5: Bollinger Bands ===
       const priceAtLowerBand = currentPrice <= indicators.bollingerLower * 1.002;
@@ -319,7 +346,7 @@ export async function registerRoutes(
         
         return res.status(200).json({
           noEntry: true,
-          analysis: `⏳ ${tvAnalysis.signal} | ${confirmations.toFixed(1)}/${maxPoints} балів | ${reasons.join(' | ')} | RSI:${indicators.rsi.toFixed(0)}`,
+          analysis: `⏳ ${tvAnalysis.signal} | ${confirmations.toFixed(1)}/${maxPoints} балів | ${reasons.join(' | ')} | RSI:${realRsi.toFixed(0)}`,
           pair,
         });
       }
@@ -337,7 +364,7 @@ export async function registerRoutes(
 📊 АНАЛІЗ 23 ІНДИКАТОРІВ (${confirmations.toFixed(1)}/${maxPoints} балів = ${accuracyPercent}% точність):
 
 ОСЦИЛЯТОРИ (${oscillatorsConfirmed}/5 підтверджують):
-- RSI: ${indicators.rsi.toFixed(1)} ${rsiConfirms ? '✅ ЕКСТРЕМУМ' : ''}
+- RSI: ${realRsi.toFixed(1)} ${rsiConfirms ? '✅ ЕКСТРЕМУМ' : ''}
 - Stochastic: ${indicators.stochK.toFixed(1)} ${stochConfirms ? '✅' : ''}
 - Williams %R: ${indicators.williamsR.toFixed(1)} ${williamsConfirms ? '✅' : ''}
 - CCI: ${indicators.cci.toFixed(1)} ${cciConfirms ? '✅' : ''}
@@ -370,7 +397,7 @@ export async function registerRoutes(
       
       const analysisDetails = [
         `🎯 ${accuracyPercent}% ТОЧНІСТЬ | ${confirmations.toFixed(1)}/${maxPoints} балів`,
-        `📊 23 ІНДИКАТОРИ: TV:${tvAnalysis.signal} | RSI:${indicators.rsi.toFixed(0)} | Stoch:${indicators.stochK.toFixed(0)} | W%R:${indicators.williamsR.toFixed(0)}`,
+        `📊 23 ІНДИКАТОРИ: TV:${tvAnalysis.signal} | RSI:${realRsi.toFixed(0)} | Stoch:${indicators.stochK.toFixed(0)} | W%R:${indicators.williamsR.toFixed(0)}`,
         `✅ Осцилятори: ${oscillatorsConfirmed}/5 | Канали: ${channelsConfirmed}/4 | EMA+MACD: ✓`,
         `💡 ${aiExplanation}`
       ].join('\n');

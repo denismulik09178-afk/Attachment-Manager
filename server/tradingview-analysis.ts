@@ -12,10 +12,18 @@ interface TradingViewAnalysisResult {
   indicators: {
     rsi?: number;
     macd?: number;
+    macdSignal?: number;
     ema20?: number;
     ema50?: number;
     sma20?: number;
     sma50?: number;
+    adx?: number;
+    adxPlus?: number;
+    adxMinus?: number;
+    close?: number;
+    recommendAll?: number;
+    recommendMA?: number;
+    recommendOsc?: number;
   };
   summary: string;
 }
@@ -47,22 +55,26 @@ export async function getTradingViewAnalysis(
   const pair = symbol.replace('/', '');
   const interval = getTimeframeInterval(timeframeMinutes);
   
+  // TradingView scanner API uses different column naming per interval
+  // For timeframes other than daily, we need to append |<interval>
+  const suffix = interval === '1D' ? '' : `|${interval}`;
+  
   const indicators = [
-    `Recommend.All|${interval}`,
-    `Recommend.MA|${interval}`,
-    `Recommend.Other|${interval}`,
-    `RSI|${interval}`,
-    `RSI[1]|${interval}`,
-    `MACD.macd|${interval}`,
-    `MACD.signal|${interval}`,
-    `EMA20|${interval}`,
-    `EMA50|${interval}`,
-    `SMA20|${interval}`,
-    `SMA50|${interval}`,
-    `close|${interval}`,
-    `ADX|${interval}`,
-    `ADX+DI|${interval}`,
-    `ADX-DI|${interval}`,
+    `Recommend.All${suffix}`,
+    `Recommend.MA${suffix}`,
+    `Recommend.Other${suffix}`,
+    `RSI${suffix}`,
+    `RSI[1]${suffix}`,
+    `MACD.macd${suffix}`,
+    `MACD.signal${suffix}`,
+    `EMA20${suffix}`,
+    `EMA50${suffix}`,
+    `SMA20${suffix}`,
+    `SMA50${suffix}`,
+    `close${suffix}`,
+    `ADX${suffix}`,
+    `ADX+DI${suffix}`,
+    `ADX-DI${suffix}`,
   ];
 
   try {
@@ -70,6 +82,7 @@ export async function getTradingViewAnalysis(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0',
       },
       body: JSON.stringify({
         symbols: {
@@ -153,10 +166,18 @@ export async function getTradingViewAnalysis(
       indicators: {
         rsi,
         macd,
+        macdSignal,
         ema20,
         ema50,
         sma20,
-        sma50
+        sma50,
+        adx,
+        adxPlus,
+        adxMinus,
+        close,
+        recommendAll,
+        recommendMA,
+        recommendOsc: recommendOther,
       },
       summary
     };

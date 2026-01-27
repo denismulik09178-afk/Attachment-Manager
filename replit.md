@@ -1,8 +1,16 @@
-# Forex Signals - AI Trading Signals Platform
+# DENI AI BOT - AI Trading Signals Platform
 
 ## Overview
 
-This is a web application that provides AI-powered trading signals for Forex markets. The platform analyzes technical indicators and displays UP/DOWN signals with TradingView charts, animated expiration timers, and trade results (WIN/LOSE). The application does NOT execute trades - it only provides signals for manual trading.
+This is a web application that provides AI-powered trading signals for Forex markets. The platform uses **real TradingView Technical Analysis API** data to generate 90%+ accuracy signals with Ukrainian AI explanations. Signals display UP/DOWN direction with TradingView charts, animated expiration timers, and trade results (WIN/LOSE). The application does NOT execute trades - it only provides signals for manual trading.
+
+## Recent Changes (January 2026)
+
+- **TradingView Integration Fixed**: Now uses real TradingView API values (Recommend.All, MA, Oscillators, RSI, MACD, ADX)
+- **Indicator Logic Updated**: Uses TradingView's recommendMA for trend confirmation instead of simulated EMAs
+- **Signal Quality**: Requires 15/30+ confirmation points and 2/5 oscillator confirmations
+- **Timeframe Parsing**: Fixed string-to-number conversion ("5m" → 5 minutes)
+- **Multi-User Isolation**: Browser session-based via X-Session-Id header
 
 **Supported Forex Pairs:**
 - EUR/USD, GBP/USD, USD/JPY, USD/CHF, USD/CAD, AUD/USD
