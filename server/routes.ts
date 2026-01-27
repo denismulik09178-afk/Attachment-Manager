@@ -359,46 +359,40 @@ export async function registerRoutes(
       };
       
       try {
-        const systemPrompt = `Ти — професійний Forex трейдер з 15+ роками досвіду. Аналізуєш ринок і даєш торгові сигнали.
+        const systemPrompt = `Ти — професійний трейдер бінарних опціонів з 10+ роками досвіду. Даєш сигнали на КОРОТКІ таймфрейми (1-5 хвилин).
 
-ТВОЯ ЗАДАЧА:
-1. Проаналізуй всі індикатори
-2. Визнач напрямок: UP (купівля) або DOWN (продаж)
-3. Оціни впевненість 70-95%
-4. Поясни своє рішення українською
+ВАЖЛИВО: Це БІНАРНИЙ ОПЦІОН! Ти прогнозуєш куди піде ціна за НАСТУПНІ ${timeframe} ХВИЛИН.
+- Якщо через ${timeframe} хв ціна ВИЩЕ поточної = UP виграв
+- Якщо через ${timeframe} хв ціна НИЖЧЕ поточної = DOWN виграв
 
-КРИТЕРІЇ АНАЛІЗУ:
-- RSI: <30 перепродано (UP), >70 перекуплено (DOWN), 40-60 нейтрально
-- MACD: histogram > 0 бичачий, < 0 ведмежий
-- Stochastic: K>D бичачий crossover, K<D ведмежий
-- ADX: >25 сильний тренд, <20 слабкий
-- CCI: >100 перекуплено, <-100 перепродано
-- BB Position: <20% біля нижньої (UP), >80% біля верхньої (DOWN)
-- EMA: ціна > EMA20 > EMA50 = бичачий тренд
+ДЛЯ КОРОТКИХ ТАЙМФРЕЙМІВ (1-5 хв) ВАЖЛИВО:
+- RSI: >65 = SHORT (ціна скоро впаде), <35 = LONG (ціна скоро зросте)
+- Stochastic: K перетинає D зверху = SHORT, знизу = LONG
+- MACD histogram: міняє знак = розворот, росте = продовження
+- BB Position: >75% = SHORT (відскок від верху), <25% = LONG (відскок від низу)
+- Моментум важливіший за тренд на коротких таймфреймах!
 
 ВІДПОВІДАЙ ТІЛЬКИ JSON:
-{"direction": "UP" або "DOWN" або null, "confidence": 70-95, "analysis": "пояснення українською 2-3 речення"}
+{"direction": "UP" або "DOWN" або null, "confidence": 70-95, "analysis": "чому ціна піде UP/DOWN за ${timeframe} хвилин"}
 
-Якщо сигнал слабкий або неоднозначний - direction = null`;
+Якщо немає чіткого сигналу на ${timeframe} хв - direction = null`;
 
-        const userPrompt = `АНАЛІЗУЙ РИНОК І ДАЙ СИГНАЛ:
+        const userPrompt = `БІНАРНИЙ ОПЦІОН: ${pair.symbol} | ЕКСПІРАЦІЯ: ${timeframe} ХВИЛИН
 
-${pair.symbol} | Таймфрейм: ${timeframe}m
+Куди піде ціна за НАСТУПНІ ${timeframe} хвилин?
 
 ПОТОЧНА ЦІНА: ${currentPrice.toFixed(5)}
 
-ІНДИКАТОРИ:
-• RSI: ${marketData.rsi}
-• ADX: ${marketData.adx}
-• MACD: ${marketData.macd} | Signal: ${marketData.macdSignal} | Hist: ${marketData.macdHist}
-• Stochastic: K=${marketData.stochK} D=${marketData.stochD}
+ІНДИКАТОРИ (1-хвилинний графік):
+• RSI: ${marketData.rsi} ${parseFloat(marketData.rsi) > 65 ? '⚠️ перекуплено' : parseFloat(marketData.rsi) < 35 ? '⚠️ перепродано' : ''}
+• Stochastic: K=${marketData.stochK} D=${marketData.stochD} ${parseFloat(marketData.stochK) > parseFloat(marketData.stochD) ? '↑' : '↓'}
+• MACD Histogram: ${marketData.macdHist} ${parseFloat(marketData.macdHist) > 0 ? '(бичачий)' : '(ведмежий)'}
+• Bollinger: ${marketData.bbPosition} ${parseFloat(marketData.bbPosition) > 75 ? '⚠️ верхня межа' : parseFloat(marketData.bbPosition) < 25 ? '⚠️ нижня межа' : ''}
 • CCI: ${marketData.cci}
-• Bollinger Bands Position: ${marketData.bbPosition}
-• EMA20: ${marketData.ema20} | EMA50: ${marketData.ema50}
-• TradingView Recommend: ${marketData.tvRecommend}
-• ATR: ${marketData.atr}
+• ADX: ${marketData.adx} (сила тренду)
+• TradingView: ${marketData.tvRecommend}
 
-Проаналізуй ці дані і дай торговий сигнал. JSON відповідь:`;
+Прогноз на ${timeframe} хвилин. JSON:`;
 
         const aiResponse = await openai.chat.completions.create({
           model: "gpt-4o-mini",
