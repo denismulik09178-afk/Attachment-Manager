@@ -107,14 +107,22 @@ export async function registerRoutes(
     try {
       const { pairId, timeframe: timeframeStr } = req.body;
       
-      // Convert timeframe string to minutes (e.g., "5m" -> 5, "1h" -> 60)
-      const parseTimeframe = (tf: string): number => {
-        if (!tf || typeof tf !== 'string') return 5; // default 5 minutes
-        const match = tf.match(/^(\d+)(m|h)?$/i);
-        if (!match) return 5;
-        const value = parseInt(match[1], 10);
-        const unit = match[2]?.toLowerCase() || 'm';
-        return unit === 'h' ? value * 60 : value;
+      // Convert timeframe to minutes - supports: number (1), string ("5m", "1h", "30")
+      const parseTimeframe = (tf: any): number => {
+        // If already a number, use it directly
+        if (typeof tf === 'number' && tf > 0) return tf;
+        
+        // If string, parse it
+        if (typeof tf === 'string') {
+          const match = tf.match(/^(\d+)(m|h)?$/i);
+          if (match) {
+            const value = parseInt(match[1], 10);
+            const unit = match[2]?.toLowerCase() || 'm';
+            return unit === 'h' ? value * 60 : value;
+          }
+        }
+        
+        return 5; // default 5 minutes only if invalid
       };
       const timeframe = parseTimeframe(timeframeStr);
       
