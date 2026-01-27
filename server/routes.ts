@@ -143,7 +143,11 @@ export async function registerRoutes(
       const recommendOsc = tvAnalysis.indicators.recommendOsc ?? 0;
       
       // Ціна ТІЛЬКИ від TradingView (та сама що й для RSI/ADX/MACD)
+      // Без округлення - точна ціна як є
       const currentPrice = tvClose ?? 0;
+      
+      // Логування для перевірки точності
+      console.log(`[PRICE] ${pair.symbol}: TV close=${tvClose}, RSI=${realRsi?.toFixed(1)}, ADX=${realAdx?.toFixed(1)}`);
       
       // Перевірка що TradingView повернув дані
       if (!currentPrice || !realRsi || !realAdx) {
@@ -316,15 +320,15 @@ JSON: {"trade":true/false,"pct":85-99,"ua":"1 речення чому"}`;
         
         if (tvClose) {
           newPrice = tvClose;
+          // Логування для перевірки - ціна точно з TV
+          console.log(`[PRICE UPDATE] ${pair.symbol}: TV close=${tvClose.toFixed(5)}`);
         } else {
-          // Fallback: мінімальне відхилення від поточної ціни
-          const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
-          const volatility = pair.symbol.includes('JPY') ? 0.005 : 0.00005;
-          newPrice = currentPrice + (Math.random() - 0.5) * volatility;
+          // Fallback: залишаємо поточну ціну без змін
+          newPrice = parseFloat(signal.currentPrice || signal.openPrice);
+          console.log(`[PRICE UPDATE] ${pair.symbol}: TV unavailable, keeping ${newPrice}`);
         }
       } else {
-        const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
-        newPrice = currentPrice + (Math.random() - 0.5) * 0.00005;
+        newPrice = parseFloat(signal.currentPrice || signal.openPrice);
       }
       
       const updated = await storage.updateSignalPrice(signalId, newPrice.toFixed(5));
