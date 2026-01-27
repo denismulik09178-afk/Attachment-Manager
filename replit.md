@@ -6,14 +6,14 @@ This is a web application that provides AI-powered trading signals for Forex mar
 
 ## Recent Changes (January 2026)
 
-- **AI TRADER ANALYSIS**: Complete rewrite - OpenAI now analyzes market like a professional trader with 25+ years experience
-- **Professional Decision Making**: AI evaluates TradingView data, RSI, ADX, MACD, Bollinger Bands and decides whether to trade
-- **Detailed Ukrainian Explanations**: AI provides reasoning in Ukrainian explaining why it recommends entering or waiting
-- **TradingView Integration**: Uses real TradingView API values (Recommend.All, MA, Oscillators, RSI, MACD, ADX)
-- **Smart Filtering**: AI rejects weak signals with clear explanations ("Відсутність тренду", "ADX нижчий за 20")
-- **Timeframe Parsing**: Handles both numbers (1, 5, 60) and strings ("5m", "1h")
-- **Price Consistency**: Sparkline data generated within 50 pips of real price
+- **AI PROMPT UKRAINIAN**: Весь промпт та аналіз тепер повністю українською
+- **COMPACT OUTPUT**: Обмеження 150 символів на AI аналіз для стислості
+- **STRICT FILTERING**: Recommend.All >= 0.30, ADX >= 20 для якісних сигналів
+- **NO AUTO-APPROVE**: Fallback тільки для дуже сильних сигналів (0.50+, ADX 25+)
+- **LOW TEMPERATURE**: 0.1 для стабільних, передбачуваних відповідей
+- **TradingView Integration**: Real RSI, MACD, ADX values for professional analysis
 - **Multi-User Isolation**: Browser session-based via X-Session-Id header
+- **Price Consistency**: Sparkline data generated within 50 pips of real price
 
 **Supported Forex Pairs:**
 - EUR/USD, GBP/USD, USD/JPY, USD/CHF, USD/CAD, AUD/USD
