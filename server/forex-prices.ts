@@ -238,6 +238,60 @@ export function calculateTechnicalIndicators(priceHistory: number[]) {
   const pivotPoint = (pivotHigh + pivotLow + currentPrice) / 3;
   const support1 = 2 * pivotPoint - pivotHigh;
   const resistance1 = 2 * pivotPoint - pivotLow;
+  const support2 = pivotPoint - (pivotHigh - pivotLow);
+  const resistance2 = pivotPoint + (pivotHigh - pivotLow);
+
+  // === VWAP-like (Volume Weighted Average Price approximation) ===
+  const vwap = priceHistory.slice(-20).reduce((sum, p, i) => sum + p * (i + 1), 0) / 
+               priceHistory.slice(-20).reduce((sum, _, i) => sum + (i + 1), 0);
+
+  // === Keltner Channel ===
+  const keltnerMiddle = ema21;
+  const keltnerUpper = keltnerMiddle + atr * 2;
+  const keltnerLower = keltnerMiddle - atr * 2;
+
+  // === Donchian Channel ===
+  const donchianHigh = Math.max(...priceHistory.slice(-20));
+  const donchianLow = Math.min(...priceHistory.slice(-20));
+  const donchianMiddle = (donchianHigh + donchianLow) / 2;
+
+  // === Ichimoku Cloud (simplified) ===
+  const tenkanSen = (Math.max(...priceHistory.slice(-9)) + Math.min(...priceHistory.slice(-9))) / 2;
+  const kijunSen = (Math.max(...priceHistory.slice(-26)) + Math.min(...priceHistory.slice(-26))) / 2;
+  const senkouSpanA = (tenkanSen + kijunSen) / 2;
+  const senkouSpanB = (Math.max(...priceHistory.slice(-52)) + Math.min(...priceHistory.slice(-52))) / 2;
+
+  // === Parabolic SAR approximation ===
+  const sarUp = currentPrice > ema9;
+  const sarAcceleration = sarUp ? 0.02 : -0.02;
+
+  // === Chaikin Money Flow (CMF) approximation ===
+  let cmfSum = 0;
+  for (let i = Math.max(0, priceHistory.length - 20); i < priceHistory.length; i++) {
+    const high = priceHistory[i];
+    const low = i > 0 ? priceHistory[i - 1] : high;
+    const close = priceHistory[i];
+    const mfm = (high - low) !== 0 ? ((close - low) - (high - close)) / (high - low) : 0;
+    cmfSum += mfm;
+  }
+  const cmf = cmfSum / 20;
+
+  // === Aroon Indicator ===
+  const last25 = priceHistory.slice(-25);
+  const aroonUpIdx = last25.indexOf(Math.max(...last25));
+  const aroonDownIdx = last25.indexOf(Math.min(...last25));
+  const aroonUp = ((25 - (24 - aroonUpIdx)) / 25) * 100;
+  const aroonDown = ((25 - (24 - aroonDownIdx)) / 25) * 100;
+  const aroonOsc = aroonUp - aroonDown;
+
+  // === TRIX (Triple Exponential Average) ===
+  const ema1 = calculateEMA(priceHistory, 15);
+  const trix = ((ema9 - ema1) / ema1) * 100;
+
+  // === Price Position relative to channels ===
+  const pricePositionBB = (currentPrice - bollingerLower) / (bollingerUpper - bollingerLower) * 100;
+  const pricePositionKeltner = (currentPrice - keltnerLower) / (keltnerUpper - keltnerLower) * 100;
+  const pricePositionDonchian = (currentPrice - donchianLow) / (donchianHigh - donchianLow) * 100;
 
   // === Trend Strength ===
   const shortTrend = ema9 > ema21 ? 1 : -1;
@@ -276,10 +330,25 @@ export function calculateTechnicalIndicators(priceHistory: number[]) {
     trendStrength,
     
     // Pivot levels
-    pivotPoint, support1, resistance1,
+    pivotPoint, support1, resistance1, support2, resistance2,
     
     // Momentum
     volumeMomentum,
+    
+    // NEW: Channels
+    vwap,
+    keltnerUpper, keltnerLower, keltnerMiddle,
+    donchianHigh, donchianLow, donchianMiddle,
+    
+    // NEW: Ichimoku
+    tenkanSen, kijunSen, senkouSpanA, senkouSpanB,
+    
+    // NEW: Additional
+    cmf, // Chaikin Money Flow
+    aroonUp, aroonDown, aroonOsc,
+    trix,
+    pricePositionBB, pricePositionKeltner, pricePositionDonchian,
+    sarUp,
     
     // Summary
     trend: trendStrength > 0 ? 'BULLISH' : trendStrength < 0 ? 'BEARISH' : 'NEUTRAL',
