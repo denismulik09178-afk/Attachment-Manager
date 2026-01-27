@@ -124,7 +124,9 @@ export async function getMultiplePrices(symbols: string[]): Promise<Record<strin
 
 export function calculateTechnicalIndicators(priceHistory: number[]) {
   const prices = priceHistory.slice(-14);
+  const currentPrice = priceHistory[priceHistory.length - 1];
   
+  // === RSI (Relative Strength Index) ===
   let gains = 0, losses = 0;
   for (let i = 1; i < prices.length; i++) {
     const change = prices[i] - prices[i - 1];
@@ -136,36 +138,153 @@ export function calculateTechnicalIndicators(priceHistory: number[]) {
   const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
   const rsi = 100 - (100 / (1 + rs));
 
+  // === EMAs (Exponential Moving Averages) ===
   const ema9 = calculateEMA(priceHistory, 9);
   const ema21 = calculateEMA(priceHistory, 21);
   const ema50 = calculateEMA(priceHistory, 50);
   const ema200 = calculateEMA(priceHistory, Math.min(200, priceHistory.length));
 
-  const sma20 = priceHistory.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  // === SMAs (Simple Moving Averages) ===
+  const sma10 = priceHistory.slice(-10).reduce((a, b) => a + b, 0) / Math.min(10, priceHistory.length);
+  const sma20 = priceHistory.slice(-20).reduce((a, b) => a + b, 0) / Math.min(20, priceHistory.length);
+  const sma50 = priceHistory.slice(-50).reduce((a, b) => a + b, 0) / Math.min(50, priceHistory.length);
+
+  // === Bollinger Bands ===
   const stdDev = Math.sqrt(
     priceHistory.slice(-20).reduce((sum, p) => sum + Math.pow(p - sma20, 2), 0) / 20
   );
   const bollingerUpper = sma20 + stdDev * 2;
   const bollingerLower = sma20 - stdDev * 2;
+  const bollingerWidth = (bollingerUpper - bollingerLower) / sma20 * 100;
 
+  // === MACD ===
   const ema12 = calculateEMA(priceHistory, 12);
   const ema26 = calculateEMA(priceHistory, 26);
   const macd = ema12 - ema26;
-  const signalLine = calculateEMA([...Array(9).fill(macd)], 9);
+  const macdSignal = calculateEMA([...Array(9).fill(macd)], 9);
+  const macdHistogram = macd - macdSignal;
 
-  const currentPrice = priceHistory[priceHistory.length - 1];
+  // === Stochastic Oscillator ===
   const high14 = Math.max(...priceHistory.slice(-14));
   const low14 = Math.min(...priceHistory.slice(-14));
-  const stochK = ((currentPrice - low14) / (high14 - low14)) * 100;
+  const stochK = high14 !== low14 ? ((currentPrice - low14) / (high14 - low14)) * 100 : 50;
+  const stochD = stochK; // Simplified D line
+
+  // === Williams %R ===
+  const williamsR = high14 !== low14 ? ((high14 - currentPrice) / (high14 - low14)) * -100 : -50;
+
+  // === CCI (Commodity Channel Index) ===
+  const typicalPrice = currentPrice;
+  const meanDeviation = priceHistory.slice(-20).reduce((sum, p) => sum + Math.abs(p - sma20), 0) / 20;
+  const cci = meanDeviation !== 0 ? (typicalPrice - sma20) / (0.015 * meanDeviation) : 0;
+
+  // === ADX (Average Directional Index) - simplified ===
+  let plusDM = 0, minusDM = 0, tr = 0;
+  for (let i = 1; i < Math.min(14, priceHistory.length); i++) {
+    const high = priceHistory[i];
+    const low = priceHistory[i - 1];
+    const prevHigh = i > 1 ? priceHistory[i - 1] : high;
+    const prevLow = i > 1 ? priceHistory[i - 2] : low;
+    
+    const upMove = high - prevHigh;
+    const downMove = prevLow - low;
+    
+    if (upMove > downMove && upMove > 0) plusDM += upMove;
+    if (downMove > upMove && downMove > 0) minusDM += downMove;
+    tr += Math.abs(high - low);
+  }
+  const plusDI = tr !== 0 ? (plusDM / tr) * 100 : 0;
+  const minusDI = tr !== 0 ? (minusDM / tr) * 100 : 0;
+  const dx = (plusDI + minusDI) !== 0 ? Math.abs(plusDI - minusDI) / (plusDI + minusDI) * 100 : 0;
+  const adx = dx;
+
+  // === ATR (Average True Range) ===
+  let atrSum = 0;
+  for (let i = 1; i < Math.min(14, priceHistory.length); i++) {
+    atrSum += Math.abs(priceHistory[i] - priceHistory[i - 1]);
+  }
+  const atr = atrSum / Math.min(13, priceHistory.length - 1);
+
+  // === ROC (Rate of Change) ===
+  const roc = priceHistory.length > 10 
+    ? ((currentPrice - priceHistory[priceHistory.length - 10]) / priceHistory[priceHistory.length - 10]) * 100 
+    : 0;
+
+  // === MFI-like momentum (Money Flow Index simplified) ===
+  let positiveFlow = 0, negativeFlow = 0;
+  for (let i = 1; i < Math.min(14, priceHistory.length); i++) {
+    const change = priceHistory[i] - priceHistory[i - 1];
+    if (change > 0) positiveFlow += priceHistory[i];
+    else negativeFlow += priceHistory[i];
+  }
+  const mfi = (positiveFlow + negativeFlow) !== 0 
+    ? (positiveFlow / (positiveFlow + negativeFlow)) * 100 
+    : 50;
+
+  // === Ultimate Oscillator ===
+  const bp7 = currentPrice - Math.min(...priceHistory.slice(-7));
+  const tr7 = Math.max(...priceHistory.slice(-7)) - Math.min(...priceHistory.slice(-7));
+  const bp14 = currentPrice - Math.min(...priceHistory.slice(-14));
+  const tr14 = Math.max(...priceHistory.slice(-14)) - Math.min(...priceHistory.slice(-14));
+  const bp28 = currentPrice - Math.min(...priceHistory.slice(-28));
+  const tr28 = Math.max(...priceHistory.slice(-28)) - Math.min(...priceHistory.slice(-28));
+  const uo = tr7 && tr14 && tr28 
+    ? ((4 * bp7/tr7 + 2 * bp14/tr14 + bp28/tr28) / 7) * 100 
+    : 50;
+
+  // === Pivot Points ===
+  const pivotHigh = Math.max(...priceHistory.slice(-5));
+  const pivotLow = Math.min(...priceHistory.slice(-5));
+  const pivotPoint = (pivotHigh + pivotLow + currentPrice) / 3;
+  const support1 = 2 * pivotPoint - pivotHigh;
+  const resistance1 = 2 * pivotPoint - pivotLow;
+
+  // === Trend Strength ===
+  const shortTrend = ema9 > ema21 ? 1 : -1;
+  const mediumTrend = ema21 > ema50 ? 1 : -1;
+  const longTrend = currentPrice > ema200 ? 1 : -1;
+  const trendStrength = shortTrend + mediumTrend + longTrend; // -3 to +3
+
+  // === Volume-like Momentum ===
+  const priceChanges = [];
+  for (let i = 1; i < priceHistory.length; i++) {
+    priceChanges.push(Math.abs(priceHistory[i] - priceHistory[i - 1]));
+  }
+  const avgChange = priceChanges.reduce((a, b) => a + b, 0) / priceChanges.length;
+  const recentChange = priceChanges.slice(-5).reduce((a, b) => a + b, 0) / 5;
+  const volumeMomentum = avgChange !== 0 ? recentChange / avgChange : 1;
 
   return {
+    // Core indicators
     rsi,
     ema9, ema21, ema50, ema200,
-    bollingerUpper, bollingerLower, sma20,
-    macd, macdSignal: signalLine,
-    stochK,
-    trend: ema9 > ema21 ? 'BULLISH' : 'BEARISH',
-    momentum: rsi > 50 ? 'POSITIVE' : 'NEGATIVE'
+    sma10, sma20, sma50,
+    bollingerUpper, bollingerLower, bollingerWidth,
+    macd, macdSignal, macdHistogram,
+    
+    // Oscillators
+    stochK, stochD,
+    williamsR,
+    cci,
+    mfi,
+    uo, // Ultimate Oscillator
+    
+    // Trend indicators
+    adx, plusDI, minusDI,
+    atr,
+    roc,
+    trendStrength,
+    
+    // Pivot levels
+    pivotPoint, support1, resistance1,
+    
+    // Momentum
+    volumeMomentum,
+    
+    // Summary
+    trend: trendStrength > 0 ? 'BULLISH' : trendStrength < 0 ? 'BEARISH' : 'NEUTRAL',
+    momentum: rsi > 50 ? 'POSITIVE' : 'NEGATIVE',
+    strength: adx > 25 ? 'STRONG' : 'WEAK'
   };
 }
 
