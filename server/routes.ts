@@ -329,100 +329,126 @@ export async function registerRoutes(
       }
       priceHistory.push(currentPrice);
       
-      // ========== STRICT FILTERS - ONLY CONFIDENT SIGNALS ==========
+      // ========== AI ПРИЙМАЄ РІШЕННЯ - дивиться на ринок і вирішує ==========
       
-      // SMC module already checked: direction, confluence, session, ADX
-      if (!smc.shouldTrade || !smc.finalDirection) {
+      // Готуємо всі дані ринку для ШІ
+      const marketData = {
+        symbol: pair.symbol,
+        timeframe,
+        price: currentPrice,
+        rsi: ind.rsi?.toFixed(1) || 'N/A',
+        adx: ind.adx?.toFixed(1) || 'N/A',
+        macd: ind.macd?.toFixed(5) || 'N/A',
+        macdSignal: ind.macdSignal?.toFixed(5) || 'N/A',
+        macdHist: ind.macdHist?.toFixed(5) || 'N/A',
+        stochK: ind.stochK?.toFixed(1) || 'N/A',
+        stochD: ind.stochD?.toFixed(1) || 'N/A',
+        cci: ind.cci?.toFixed(1) || 'N/A',
+        bbPosition: ind.bbPosition ? (ind.bbPosition * 100).toFixed(0) + '%' : 'N/A',
+        tvRecommend: ind.recommendAll ? (ind.recommendAll * 100).toFixed(0) + '%' : 'N/A',
+        ema20: ind.ema20?.toFixed(5) || 'N/A',
+        ema50: ind.ema50?.toFixed(5) || 'N/A',
+        atr: ind.atr?.toFixed(5) || 'N/A',
+      };
+      
+      // ШІ аналізує ринок і приймає рішення
+      let aiDecision: { direction: 'UP' | 'DOWN' | null; confidence: number; analysis: string } = {
+        direction: null,
+        confidence: 0,
+        analysis: ''
+      };
+      
+      try {
+        const systemPrompt = `Ти — професійний Forex трейдер з 15+ роками досвіду. Аналізуєш ринок і даєш торгові сигнали.
+
+ТВОЯ ЗАДАЧА:
+1. Проаналізуй всі індикатори
+2. Визнач напрямок: UP (купівля) або DOWN (продаж)
+3. Оціни впевненість 70-95%
+4. Поясни своє рішення українською
+
+КРИТЕРІЇ АНАЛІЗУ:
+- RSI: <30 перепродано (UP), >70 перекуплено (DOWN), 40-60 нейтрально
+- MACD: histogram > 0 бичачий, < 0 ведмежий
+- Stochastic: K>D бичачий crossover, K<D ведмежий
+- ADX: >25 сильний тренд, <20 слабкий
+- CCI: >100 перекуплено, <-100 перепродано
+- BB Position: <20% біля нижньої (UP), >80% біля верхньої (DOWN)
+- EMA: ціна > EMA20 > EMA50 = бичачий тренд
+
+ВІДПОВІДАЙ ТІЛЬКИ JSON:
+{"direction": "UP" або "DOWN" або null, "confidence": 70-95, "analysis": "пояснення українською 2-3 речення"}
+
+Якщо сигнал слабкий або неоднозначний - direction = null`;
+
+        const userPrompt = `АНАЛІЗУЙ РИНОК І ДАЙ СИГНАЛ:
+
+${pair.symbol} | Таймфрейм: ${timeframe}m
+
+ПОТОЧНА ЦІНА: ${currentPrice.toFixed(5)}
+
+ІНДИКАТОРИ:
+• RSI: ${marketData.rsi}
+• ADX: ${marketData.adx}
+• MACD: ${marketData.macd} | Signal: ${marketData.macdSignal} | Hist: ${marketData.macdHist}
+• Stochastic: K=${marketData.stochK} D=${marketData.stochD}
+• CCI: ${marketData.cci}
+• Bollinger Bands Position: ${marketData.bbPosition}
+• EMA20: ${marketData.ema20} | EMA50: ${marketData.ema50}
+• TradingView Recommend: ${marketData.tvRecommend}
+• ATR: ${marketData.atr}
+
+Проаналізуй ці дані і дай торговий сигнал. JSON відповідь:`;
+
+        const aiResponse = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          max_tokens: 200,
+          temperature: 0.2,
+        });
+        
+        const responseText = aiResponse.choices[0]?.message?.content || '';
+        console.log(`[AI] ${pair.symbol} response:`, responseText);
+        
+        // Парсимо JSON відповідь
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.direction === 'UP' || parsed.direction === 'DOWN') {
+            aiDecision = {
+              direction: parsed.direction,
+              confidence: Math.max(70, Math.min(95, parsed.confidence || 75)),
+              analysis: parsed.analysis || `${parsed.direction === 'UP' ? 'Купівля' : 'Продаж'} ${pair.symbol}`
+            };
+          }
+        }
+      } catch (e) {
+        console.error("AI decision error:", e);
+      }
+      
+      // Якщо ШІ не дав сигнал - немає входу
+      if (!aiDecision.direction) {
         return res.status(200).json({
           noEntry: true,
-          analysis: smc.skipReason || `Немає впевненого сигналу`,
+          analysis: aiDecision.analysis || 'ШІ не знайшов чіткого сигналу',
           pair,
         });
       }
       
-      // ========== AI PROFESSIONAL SMC ANALYSIS ==========
-      const direction = smc.finalDirection;
+      const direction = aiDecision.direction;
       const dirText = direction === 'UP' ? 'LONG' : 'SHORT';
-      
-      // Build comprehensive SMC prompt for AI
-      const systemPrompt = `Ти — професійний SMC (Smart Money Concepts) трейдер з 15+ роками досвіду. Аналізуєш комплексний сигнал.
-
-ТВІЙ СТИЛЬ:
-- Аналізуєш структуру ринку, ліквідність, confluence
-- Використовуєш терміни: BOS, CHOCH, FVG, Premium/Discount
-- Фокус на підтвердженні від Smart Money
-- Пишеш ТІЛЬКИ українською, коротко
-
-КРИТЕРІЇ ВХОДУ (80-85% точність):
-- Confluence >= 55%
-- Структура підтверджує напрям
-- Ліквідність зібрана
-- Сесія активна (London/NY)`;
-
-      const userPrompt = `SMC АНАЛІЗ: ${pair.symbol} | ${timeframe}m
-
-CONFLUENCE: ${smc.confluence.total}%
-- Індикатори: ${smc.confluence.indicatorScore}/30
-- Структура: ${smc.confluence.structureScore}/25
-- Ліквідність: ${smc.confluence.liquidityScore}/20
-- Таймінг: ${smc.confluence.timingScore}/15
-- Сесія: ${smc.confluence.sessionScore}/10
-
-СТРУКТУРА: ${smc.marketStructure.structureDescription}
-ЛІКВІДНІСТЬ: ${smc.liquidity.liquidityDescription}
-СЕСІЯ: ${smc.session.current} - ${smc.session.description}
-ВХІД: ${smc.entryTiming.entryDescription}
-
-ІНДИКАТОРИ:
-• RSI: ${ind.rsi.toFixed(1)} | ADX: ${ind.adx.toFixed(1)}
-• Stoch: K=${ind.stochK.toFixed(0)} D=${ind.stochD.toFixed(0)}
-• CCI: ${ind.cci.toFixed(0)} | MACD: ${ind.macd > ind.macdSignal ? 'бичачий' : 'ведмежий'}
-• BB Position: ${(ind.bbPosition * 100).toFixed(0)}%
-• TV: ${(ind.recommendAll * 100).toFixed(0)}%
-
-TOP: ${smc.confluence.breakdown.slice(0, 5).join(', ')}
-
-Підтверди ${dirText} з confluence ${smc.confluence.total}%.
-
-JSON: {"trade": true/false, "pct": 75-95, "ua": "SMC аналіз 1-2 речення"}`;
-
-      // AI generates explanation (auto-confirms since SMC already validated)
-      let aiAnalysis = '';
-      try {
-        const aiPrompt = `${pair.symbol} ${dirText} ${timeframe}m. RSI=${ind.rsi.toFixed(0)}, TV=${(ind.recommendAll * 100).toFixed(0)}%, ADX=${ind.adx.toFixed(0)}. Напиши 1-2 речення чому це хороший вхід. Українською.`;
-        
-        const aiResponse = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: "Ти трейдер. Коротко пояснюй сигнали українською. Позитивно." },
-            { role: "user", content: aiPrompt }
-          ],
-          max_tokens: 80,
-          temperature: 0.3,
-        });
-        
-        aiAnalysis = aiResponse.choices[0]?.message?.content || '';
-        if (aiAnalysis.length > 120) aiAnalysis = aiAnalysis.substring(0, 117) + '...';
-      } catch (e) {
-        console.error("AI analysis error:", e);
-        aiAnalysis = `${dirText}: ${smc.confluence.breakdown.slice(0, 2).join(', ')}`;
-      }
-      
-      // Auto-confirm - SMC already validated the signal
-      const aiDecision = {
-        trade: true,
-        pct: Math.min(92, Math.max(80, smc.confluence.total + 30)),
-        ua: aiAnalysis || `${dirText}: ${smc.confluence.breakdown.slice(0, 2).join(', ')}`
-      };
       
       // ========== CREATE SIGNAL ==========
       const sparkline = priceHistory.slice(-6);
-      const confidence = Math.max(75, Math.min(95, aiDecision.pct || smc.confluence.total));
+      const confidence = aiDecision.confidence;
       
-      // Professional SMC analysis display
-      const analysisDetails = `${confidence}% ${dirText} | Confluence: ${smc.confluence.total}% | ${smc.session.current}\n` +
-        `Структура: ${smc.marketStructure.trend} | ${smc.liquidity.premiumZone ? 'PREMIUM' : 'DISCOUNT'}\n` +
-        `${aiDecision.ua}`;
+      // AI analysis display
+      const analysisDetails = `${confidence}% ${dirText} | ${pair.symbol}\n${aiDecision.analysis}`;
+      
+      console.log(`[AI SIGNAL] ${pair.symbol}: ${dirText} ${confidence}%`);
       
       const signal = await storage.createSignal({
         pairId,
@@ -439,13 +465,7 @@ JSON: {"trade": true/false, "pct": 75-95, "ua": "SMC аналіз 1-2 речен
         ...signal,
         pair,
         confidence,
-        smcData: {
-          confluence: smc.confluence,
-          structure: smc.marketStructure.trend,
-          liquidity: smc.liquidity.premiumZone ? 'PREMIUM' : 'DISCOUNT',
-          session: smc.session.current,
-          entry: smc.entryTiming.entryType
-        }
+        aiAnalysis: aiDecision.analysis
       };
 
       return res.status(201).json(enrichedSignal);
