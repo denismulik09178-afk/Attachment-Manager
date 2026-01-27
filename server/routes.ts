@@ -129,10 +129,11 @@ export async function registerRoutes(
       const isTVSignal = isStrongTVSignal || tvAnalysis.signal === 'BUY' || tvAnalysis.signal === 'SELL';
       
       // === INDICATOR 2: RSI - Relative Strength Index ===
-      const rsiExtremeUp = indicators.rsi < 30;
-      const rsiExtremeDown = indicators.rsi > 70;
-      const rsiConfirms = (tvAnalysis.recommendation === 'UP' && rsiExtremeUp) || 
-                          (tvAnalysis.recommendation === 'DOWN' && rsiExtremeDown);
+      // More lenient: <50 for UP (bullish zone), >50 for DOWN (bearish zone)
+      const rsiForUp = indicators.rsi < 50;
+      const rsiForDown = indicators.rsi > 50;
+      const rsiConfirms = (tvAnalysis.recommendation === 'UP' && rsiForUp) || 
+                          (tvAnalysis.recommendation === 'DOWN' && rsiForDown);
       
       // === INDICATOR 3: MACD - Moving Average Convergence Divergence ===
       const macdConfirmsUp = indicators.macd > indicators.macdSignal && indicators.macdHistogram > 0;
@@ -153,20 +154,23 @@ export async function registerRoutes(
                                  (tvAnalysis.recommendation === 'DOWN' && priceAtUpperBand);
       
       // === INDICATOR 6: Stochastic Oscillator ===
-      const stochOversold = indicators.stochK < 20;
-      const stochOverbought = indicators.stochK > 80;
-      const stochConfirms = (tvAnalysis.recommendation === 'UP' && stochOversold) ||
-                            (tvAnalysis.recommendation === 'DOWN' && stochOverbought);
+      // More lenient: <50 for UP, >50 for DOWN
+      const stochForUp = indicators.stochK < 50;
+      const stochForDown = indicators.stochK > 50;
+      const stochConfirms = (tvAnalysis.recommendation === 'UP' && stochForUp) ||
+                            (tvAnalysis.recommendation === 'DOWN' && stochForDown);
       
       // === INDICATOR 7: Williams %R ===
-      const williamsOversold = indicators.williamsR < -80;
-      const williamsOverbought = indicators.williamsR > -20;
+      // More lenient: <-50 for UP, >-50 for DOWN
+      const williamsOversold = indicators.williamsR < -50;
+      const williamsOverbought = indicators.williamsR > -50;
       const williamsConfirms = (tvAnalysis.recommendation === 'UP' && williamsOversold) ||
                                (tvAnalysis.recommendation === 'DOWN' && williamsOverbought);
       
       // === INDICATOR 8: CCI - Commodity Channel Index ===
-      const cciOversold = indicators.cci < -100;
-      const cciOverbought = indicators.cci > 100;
+      // More lenient: <0 for UP, >0 for DOWN
+      const cciOversold = indicators.cci < 0;
+      const cciOverbought = indicators.cci > 0;
       const cciConfirms = (tvAnalysis.recommendation === 'UP' && cciOversold) ||
                           (tvAnalysis.recommendation === 'DOWN' && cciOverbought);
       
@@ -175,8 +179,9 @@ export async function registerRoutes(
       const adxConfirms = adxStrong;
       
       // === INDICATOR 10: MFI - Money Flow Index ===
-      const mfiOversold = indicators.mfi < 30;
-      const mfiOverbought = indicators.mfi > 70;
+      // More lenient: <50 for UP, >50 for DOWN
+      const mfiOversold = indicators.mfi < 50;
+      const mfiOverbought = indicators.mfi > 50;
       const mfiConfirms = (tvAnalysis.recommendation === 'UP' && mfiOversold) ||
                           (tvAnalysis.recommendation === 'DOWN' && mfiOverbought);
       
