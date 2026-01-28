@@ -448,9 +448,19 @@ function AdminDashboard({ adminUsername, onLogout }: { adminUsername: string; on
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="p-3 rounded-md bg-muted/50 text-sm">
+                <p className="text-muted-foreground mb-1">Сьогодні:</p>
+                <div className="flex gap-4">
+                  <span className="text-green-500">{stats?.today.wins || 0} WIN</span>
+                  <span className="text-red-500">{stats?.today.losses || 0} LOSE</span>
+                  <span className="text-yellow-500">{stats?.today.draws || 0} DRAW</span>
+                  <span className="font-medium">= {stats?.today.total || 0} сигналів</span>
+                </div>
+              </div>
+              
               {stats?.fakeWinRateEnabled && stats.realStats && (
                 <div className="p-3 rounded-md bg-muted/50 text-sm">
-                  <p className="text-muted-foreground mb-1">Реальна статистика:</p>
+                  <p className="text-muted-foreground mb-1">Реальна статистика (загалом):</p>
                   <div className="flex gap-4">
                     <span className="text-green-500">{stats.realStats.wins} WIN</span>
                     <span className="text-red-500">{stats.realStats.losses} LOSE</span>
