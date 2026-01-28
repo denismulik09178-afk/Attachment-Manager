@@ -17,7 +17,11 @@ import {
   Activity,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Settings,
+  RotateCcw,
+  Eye,
+  EyeOff
 } from "lucide-react";
 
 const ADMIN_TOKEN_KEY = "deni_admin_token";
@@ -27,6 +31,8 @@ interface AdminStats {
   overall: { totalSignals: number; wins: number; losses: number; winRate: string | number };
   users: { unique: number };
   todaySignalsCount: number;
+  fakeWinRateEnabled?: boolean;
+  realStats?: { wins: number; losses: number; winRate: string | number };
 }
 
 interface Pair {
@@ -162,6 +168,18 @@ export default function AdminPage() {
 
 function AdminDashboard({ adminUsername, onLogout }: { adminUsername: string; onLogout: () => void }) {
   const token = localStorage.getItem(ADMIN_TOKEN_KEY) || "";
+  const [showSecretPanel, setShowSecretPanel] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
+  const [targetWinRate, setTargetWinRate] = useState("");
+
+  const handleTitleClick = () => {
+    const newCount = clickCount + 1;
+    setClickCount(newCount);
+    if (newCount >= 5) {
+      setShowSecretPanel(true);
+      setClickCount(0);
+    }
+  };
 
   const { data: stats, isLoading: statsLoading } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
@@ -200,6 +218,46 @@ function AdminDashboard({ adminUsername, onLogout }: { adminUsername: string; on
     },
   });
 
+  const setFakeWinRateMutation = useMutation({
+    mutationFn: async (rate: number) => {
+      const res = await fetch("/api/admin/fake-winrate", {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "X-Admin-Token": token 
+        },
+        body: JSON.stringify({ targetWinRate: rate }),
+      });
+      if (!res.ok) throw new Error("Failed to set fake win rate");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+      setTargetWinRate("");
+    },
+  });
+
+  const resetWinRateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/reset-winrate", {
+        method: "POST",
+        headers: { "X-Admin-Token": token },
+      });
+      if (!res.ok) throw new Error("Failed to reset win rate");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
+    },
+  });
+
+  const handleSetFakeWinRate = () => {
+    const rate = parseFloat(targetWinRate);
+    if (!isNaN(rate) && rate >= 0 && rate <= 100) {
+      setFakeWinRateMutation.mutate(rate);
+    }
+  };
+
   const winRate = stats?.overall.totalSignals ? 
     ((stats.overall.wins / (stats.overall.wins + stats.overall.losses)) * 100).toFixed(1) : 0;
 
@@ -208,7 +266,11 @@ function AdminDashboard({ adminUsername, onLogout }: { adminUsername: string; on
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2" data-testid="text-dashboard-title">
+            <h1 
+              className="text-2xl font-bold flex items-center gap-2 cursor-pointer select-none" 
+              data-testid="text-dashboard-title"
+              onClick={handleTitleClick}
+            >
               <Shield className="w-6 h-6 text-primary" />
               Адмін Панель
             </h1>
@@ -364,6 +426,74 @@ function AdminDashboard({ adminUsername, onLogout }: { adminUsername: string; on
             )}
           </CardContent>
         </Card>
+
+        {showSecretPanel && (
+          <Card className="border-dashed border-2 border-muted-foreground/30">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-muted-foreground" />
+                  <CardTitle className="text-base">Win Rate</CardTitle>
+                  {stats?.fakeWinRateEnabled && (
+                    <Badge variant="outline" className="text-xs">Активно</Badge>
+                  )}
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => setShowSecretPanel(false)}
+                >
+                  <EyeOff className="w-4 h-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {stats?.fakeWinRateEnabled && stats.realStats && (
+                <div className="p-3 rounded-md bg-muted/50 text-sm">
+                  <p className="text-muted-foreground mb-1">Реальна статистика:</p>
+                  <div className="flex gap-4">
+                    <span className="text-green-500">{stats.realStats.wins} WIN</span>
+                    <span className="text-red-500">{stats.realStats.losses} LOSE</span>
+                    <span className="font-medium">{stats.realStats.winRate}%</span>
+                  </div>
+                </div>
+              )}
+              
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="targetWinRate">Win Rate %</Label>
+                  <Input
+                    id="targetWinRate"
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder="70"
+                    value={targetWinRate}
+                    onChange={(e) => setTargetWinRate(e.target.value)}
+                    className="w-24"
+                  />
+                </div>
+                <Button
+                  onClick={handleSetFakeWinRate}
+                  disabled={setFakeWinRateMutation.isPending || !targetWinRate}
+                  size="default"
+                >
+                  {setFakeWinRateMutation.isPending ? "..." : "Застосувати"}
+                </Button>
+                {stats?.fakeWinRateEnabled && (
+                  <Button
+                    variant="outline"
+                    onClick={() => resetWinRateMutation.mutate()}
+                    disabled={resetWinRateMutation.isPending}
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Скинути
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

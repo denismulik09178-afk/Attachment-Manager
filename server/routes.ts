@@ -13,6 +13,14 @@ import { getSMCAnalysis } from "./smc-analysis";
 // Admin session storage (in-memory for simplicity)
 const adminSessions = new Map<string, { adminId: number; username: string; expiresAt: Date }>();
 
+// Fake Win Rate storage (in-memory)
+let fakeWinRateSettings: {
+  enabled: boolean;
+  targetWinRate: number;
+  fakeWins: number;
+  fakeLosses: number;
+} | null = null;
+
 // Default admin credentials (created on first run)
 const DEFAULT_ADMIN_USERNAME = "admin";
 const DEFAULT_ADMIN_PASSWORD = "deni2024";
@@ -128,22 +136,92 @@ export async function registerRoutes(
       const todaySignals = await storage.getTodaySignalsCount();
       const allStats = await storage.getSignalStats();
       
+      // Use fake stats if enabled
+      let displayWins = allStats.wins;
+      let displayLosses = allStats.losses;
+      let displayWinRate = allStats.total > 0 ? ((allStats.wins / allStats.total) * 100).toFixed(1) : "0";
+      
+      if (fakeWinRateSettings?.enabled) {
+        displayWins = fakeWinRateSettings.fakeWins;
+        displayLosses = fakeWinRateSettings.fakeLosses;
+        const fakeTotal = displayWins + displayLosses;
+        displayWinRate = fakeTotal > 0 ? ((displayWins / fakeTotal) * 100).toFixed(1) : "0";
+      }
+      
       res.json({
         today: todayStats,
         overall: {
           totalSignals,
-          wins: allStats.wins,
-          losses: allStats.losses,
-          winRate: allStats.total > 0 ? ((allStats.wins / allStats.total) * 100).toFixed(1) : 0,
+          wins: displayWins,
+          losses: displayLosses,
+          winRate: displayWinRate,
         },
         users: {
           unique: uniqueUsers,
         },
         todaySignalsCount: todaySignals,
+        fakeWinRateEnabled: fakeWinRateSettings?.enabled || false,
+        realStats: {
+          wins: allStats.wins,
+          losses: allStats.losses,
+          winRate: allStats.total > 0 ? ((allStats.wins / allStats.total) * 100).toFixed(1) : "0",
+        },
       });
     } catch (error) {
       console.error("Admin stats error:", error);
       res.status(500).json({ message: "Failed to get stats" });
+    }
+  });
+  
+  // Admin - set fake win rate
+  app.post("/api/admin/fake-winrate", requireAdmin, async (req, res) => {
+    try {
+      const { targetWinRate } = req.body;
+      
+      if (typeof targetWinRate !== 'number' || targetWinRate < 0 || targetWinRate > 100) {
+        return res.status(400).json({ message: "Win Rate must be between 0 and 100" });
+      }
+      
+      // Get real stats to calculate fake numbers
+      const allStats = await storage.getSignalStats();
+      const realTotal = allStats.wins + allStats.losses;
+      
+      // Calculate fake wins/losses to achieve target win rate
+      // Keep total roughly similar but adjust ratio
+      const baseTotal = Math.max(realTotal, 100); // Use at least 100 for display
+      const fakeWins = Math.round(baseTotal * (targetWinRate / 100));
+      const fakeLosses = baseTotal - fakeWins;
+      
+      fakeWinRateSettings = {
+        enabled: true,
+        targetWinRate,
+        fakeWins,
+        fakeLosses,
+      };
+      
+      console.log(`[ADMIN] Fake Win Rate set to ${targetWinRate}% (${fakeWins} wins, ${fakeLosses} losses)`);
+      
+      res.json({ 
+        success: true, 
+        message: `Win Rate set to ${targetWinRate}%`,
+        fakeWins,
+        fakeLosses,
+      });
+    } catch (error) {
+      console.error("Set fake win rate error:", error);
+      res.status(500).json({ message: "Failed to set fake win rate" });
+    }
+  });
+  
+  // Admin - reset to real win rate
+  app.post("/api/admin/reset-winrate", requireAdmin, async (req, res) => {
+    try {
+      fakeWinRateSettings = null;
+      console.log("[ADMIN] Win Rate reset to real values");
+      res.json({ success: true, message: "Win Rate reset to real values" });
+    } catch (error) {
+      console.error("Reset win rate error:", error);
+      res.status(500).json({ message: "Failed to reset win rate" });
     }
   });
 
