@@ -25,7 +25,7 @@ export function TradingViewWidget({ symbol, height = 300 }: TradingViewWidgetPro
       timezone: "Etc/UTC",
       theme: "dark",
       style: "1",
-      locale: "en",
+      locale: "uk",
       allow_symbol_change: false,
       hide_top_toolbar: true,
       hide_legend: true,

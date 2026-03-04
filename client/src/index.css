@@ -1,74 +1,141 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  --background: 224 71% 4%;
-  --foreground: 213 31% 91%;
-  
-  --card: 224 71% 4%;
-  --card-foreground: 213 31% 91%;
-  
-  --popover: 224 71% 4%;
-  --popover-foreground: 215 20.2% 65.1%;
-  
-  --primary: 210 40% 98%;
-  --primary-foreground: 222.2 47.4% 11.2%;
-  
-  --secondary: 217.2 32.6% 17.5%;
-  --secondary-foreground: 210 40% 98%;
-  
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
-  
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
-  
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 212.7 26.8% 83.9%;
+  --background: 220 20% 7%;
+  --foreground: 210 20% 95%;
 
-  /* Custom Trading Colors */
-  --win: 142 76% 36%;
-  --win-foreground: 142 76% 96%;
-  --loss: 346 87% 43%;
-  --loss-foreground: 346 87% 96%;
-  
-  --font-sans: 'Inter', sans-serif;
+  --card: 220 18% 10%;
+  --card-foreground: 210 20% 95%;
+
+  --popover: 220 18% 10%;
+  --popover-foreground: 210 15% 75%;
+
+  --primary: 174 72% 46%;
+  --primary-foreground: 220 20% 7%;
+
+  --secondary: 220 15% 16%;
+  --secondary-foreground: 210 20% 90%;
+
+  --muted: 220 15% 14%;
+  --muted-foreground: 215 12% 55%;
+
+  --accent: 174 72% 46%;
+  --accent-foreground: 220 20% 7%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 220 15% 18%;
+  --input: 220 15% 16%;
+  --ring: 174 72% 46%;
+
+  --chart-1: 174 72% 46%;
+  --chart-2: 142 71% 45%;
+  --chart-3: 0 72% 51%;
+  --chart-4: 38 92% 50%;
+  --chart-5: 262 83% 58%;
+
+  --sidebar: 220 20% 7%;
+  --sidebar-foreground: 210 20% 95%;
+  --sidebar-border: 220 15% 18%;
+  --sidebar-primary: 174 72% 46%;
+  --sidebar-primary-foreground: 220 20% 7%;
+  --sidebar-accent: 220 15% 16%;
+  --sidebar-accent-foreground: 210 20% 90%;
+  --sidebar-ring: 174 72% 46%;
+
+  --win: 142 71% 45%;
+  --win-foreground: 142 71% 95%;
+  --loss: 0 72% 51%;
+  --loss-foreground: 0 0% 100%;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+
+  --radius: 0.75rem;
 }
 
 @layer base {
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
-    background-image: 
-      radial-gradient(circle at 50% 0%, hsl(220 50% 10% / 0.5), transparent 70%),
-      linear-gradient(to bottom, hsl(224 71% 4%), hsl(224 71% 6%));
+  * {
+    -webkit-tap-highlight-color: transparent;
   }
   
-  /* Financial numbers should be monospaced */
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background: linear-gradient(165deg, hsl(220 20% 7%) 0%, hsl(220 25% 5%) 100%);
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
   .font-mono-nums {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(220 15% 20%);
+    border-radius: 2px;
   }
 }
 
 @layer components {
   .glass-card {
-    @apply bg-card/50 backdrop-blur-md border border-white/5 shadow-xl;
-  }
-  
-  .text-gradient-gold {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-yellow-200 to-yellow-500;
+    @apply bg-card/80 backdrop-blur-xl border border-white/[0.06] shadow-2xl;
   }
 
-  /* Re-add elevation classes needed by layout */
-  .hover-elevate {
-     @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+  .glass-card-elevated {
+    @apply bg-card/90 backdrop-blur-xl border border-white/[0.08] shadow-2xl;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.04);
   }
+
+  .gradient-accent {
+    @apply bg-gradient-to-r from-[hsl(174,72%,46%)] to-[hsl(174,72%,36%)];
+  }
+
+  .gradient-success {
+    @apply bg-gradient-to-r from-emerald-500 to-emerald-600;
+  }
+
+  .gradient-danger {
+    @apply bg-gradient-to-r from-rose-500 to-rose-600;
+  }
+
+  .text-gradient-accent {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[hsl(174,72%,56%)] to-[hsl(174,72%,40%)];
+  }
+
+  .pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+
+  .hover-elevate {
+    @apply transition-all duration-200;
+  }
+  .hover-elevate:active {
+    transform: scale(0.98);
+  }
+
+  .bottom-safe-area {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(174 72% 46% / 0.2); }
+  50% { box-shadow: 0 0 20px 4px hsl(174 72% 46% / 0.15); }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }

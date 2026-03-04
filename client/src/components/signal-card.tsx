@@ -1,6 +1,5 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, Clock, DollarSign, Trophy, XCircle } from "lucide-react";
+import { ArrowUp, ArrowDown, Trophy, XCircle, Timer } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState, useCallback } from "react";
 import { TradingViewWidget } from "./tradingview-widget";
@@ -12,20 +11,15 @@ interface SignalCardProps {
 
 export function SignalCard({ signal, onClose }: SignalCardProps) {
   const isUp = signal.direction === 'UP';
-  const color = isUp ? "#22c55e" : "#ef4444";
-  const bgGradient = isUp 
-    ? "from-green-500/10 to-green-500/5" 
-    : "from-red-500/10 to-red-500/5";
-  
-  // Форматуємо таймфрейм для відображення
+
   const formatTimeframe = (mins: number) => {
     if (mins >= 60) {
       const hours = mins / 60;
-      return hours === 1 ? '1 годину' : `${hours} години`;
+      return hours === 1 ? '1 год' : `${hours} год`;
     }
     return `${mins} хв`;
   };
-  
+
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [progress, setProgress] = useState<number>(100);
   const [showResult, setShowResult] = useState(false);
@@ -33,6 +27,8 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
 
   const openPrice = parseFloat(signal.openPrice);
   const currentPrice = parseFloat(signal.currentPrice || signal.openPrice);
+  const priceDiff = currentPrice - openPrice;
+  const isProfit = isUp ? priceDiff > 0 : priceDiff < 0;
 
   const closeSignal = useCallback(async () => {
     try {
@@ -41,20 +37,13 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
         credentials: 'include',
       });
       const data = await res.json();
-      
-      if (data.result === 'WIN') {
-        setResult('WIN');
-      } else if (data.result === 'LOSE') {
-        setResult('LOSE');
-      } else {
-        setResult('DRAW');
-      }
+
+      if (data.result === 'WIN') setResult('WIN');
+      else if (data.result === 'LOSE') setResult('LOSE');
+      else setResult('DRAW');
       setShowResult(true);
-      
-      // Показуємо результат 8 секунд перед закриттям
-      setTimeout(() => {
-        onClose?.();
-      }, 8000);
+
+      setTimeout(() => { onClose?.(); }, 8000);
     } catch (e) {
       console.error("Failed to close signal", e);
     }
@@ -62,7 +51,7 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
 
   useEffect(() => {
     if (signal.status !== 'active') return;
-    
+
     const openTime = new Date(signal.openTime).getTime();
     const durationMs = signal.timeframe * 60 * 1000;
     const expiryTime = openTime + durationMs;
@@ -71,10 +60,10 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
       const now = Date.now();
       const remaining = Math.max(0, Math.ceil((expiryTime - now) / 1000));
       const totalSeconds = signal.timeframe * 60;
-      
+
       setTimeLeft(remaining);
       setProgress((remaining / totalSeconds) * 100);
-      
+
       if (remaining <= 0) {
         clearInterval(interval);
         closeSignal();
@@ -91,117 +80,85 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
   };
 
   if (showResult) {
+    const resultConfig = {
+      WIN: { bg: 'from-emerald-500/20 to-emerald-500/5', border: 'border-emerald-500/50', icon: Trophy, color: 'text-emerald-400', label: 'ПЕРЕМОГА' },
+      LOSE: { bg: 'from-rose-500/20 to-rose-500/5', border: 'border-rose-500/50', icon: XCircle, color: 'text-rose-400', label: 'ПРОГРАШ' },
+      DRAW: { bg: 'from-amber-500/20 to-amber-500/5', border: 'border-amber-500/50', icon: Timer, color: 'text-amber-400', label: 'НІЧИЯ' },
+    };
+    const cfg = resultConfig[result || 'DRAW'];
+
     return (
       <motion.div
         initial={{ scale: 1 }}
-        animate={{ scale: [1, 1.05, 1] }}
-        transition={{ duration: 0.5 }}
+        animate={{ scale: [1, 1.02, 1] }}
+        transition={{ duration: 0.4 }}
       >
-        <Card className={`overflow-hidden border-4 ${result === 'WIN' ? 'border-green-500 bg-green-500/20' : result === 'LOSE' ? 'border-red-500 bg-red-500/20' : 'border-yellow-500 bg-yellow-500/20'}`}>
-          <CardContent className="py-12">
-            <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              transition={{ type: "spring", stiffness: 200, damping: 15 }}
-              className="flex flex-col items-center justify-center"
-            >
-              {result === 'WIN' ? (
-                <>
-                  <motion.div
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ repeat: Infinity, duration: 0.8 }}
-                  >
-                    <Trophy className="h-20 w-20 text-green-500" />
-                  </motion.div>
-                  <motion.h2 
-                    className="text-4xl font-bold text-green-500 mt-4"
-                    animate={{ y: [0, -5, 0] }}
-                    transition={{ repeat: Infinity, duration: 0.5 }}
-                  >
-                    WIN!
-                  </motion.h2>
-                </>
-              ) : result === 'LOSE' ? (
-                <>
-                  <motion.div
-                    animate={{ rotate: [0, -10, 10, 0] }}
-                    transition={{ repeat: Infinity, duration: 0.5 }}
-                  >
-                    <XCircle className="h-20 w-20 text-red-500" />
-                  </motion.div>
-                  <h2 className="text-4xl font-bold text-red-500 mt-4">LOSE</h2>
-                </>
-              ) : (
-                <>
-                  <div className="h-20 w-20 rounded-full bg-yellow-500 flex items-center justify-center">
-                    <span className="text-3xl font-bold text-white">=</span>
-                  </div>
-                  <h2 className="text-4xl font-bold text-yellow-500 mt-4">DRAW</h2>
-                </>
-              )}
-              <p className="text-muted-foreground mt-2">{signal.pair?.symbol}</p>
-              <div className="flex items-center gap-4 mt-4 text-sm">
-                <span>Вхід: {openPrice.toFixed(5)}</span>
-                <span>Закриття: {currentPrice.toFixed(5)}</span>
-              </div>
-            </motion.div>
-          </CardContent>
-        </Card>
+        <div className={`rounded-2xl border-2 ${cfg.border} bg-gradient-to-br ${cfg.bg} p-6 backdrop-blur-sm`}>
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ type: "spring", stiffness: 200, damping: 15 }}
+            className="flex flex-col items-center justify-center gap-3"
+          >
+            <cfg.icon className={`h-14 w-14 ${cfg.color}`} />
+            <h2 className={`text-3xl font-bold ${cfg.color}`}>{cfg.label}</h2>
+            <p className="text-sm text-muted-foreground">{signal.pair?.symbol}</p>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+              <span>Вхід: {openPrice.toFixed(5)}</span>
+              <span>Закриття: {currentPrice.toFixed(5)}</span>
+            </div>
+          </motion.div>
+        </div>
       </motion.div>
     );
   }
 
   return (
-    <Card 
-      className={`overflow-hidden border-l-4 bg-gradient-to-br ${bgGradient}`}
-      style={{ borderLeftColor: color }}
-    >
-      <CardHeader className="pb-2">
-        {/* Головний напрямок з таймфреймом */}
+    <div className="rounded-2xl bg-card/80 border border-white/[0.06] backdrop-blur-sm overflow-hidden" data-testid={`signal-card-${signal.id}`}>
+      <div className="p-4 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <motion.div
-              className="flex items-center justify-center w-12 h-12 rounded-full"
-              style={{ backgroundColor: `${color}20`, borderColor: color, borderWidth: 2 }}
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ repeat: Infinity, duration: 2 }}
-            >
-              {isUp ? <ArrowUp size={24} style={{ color }} /> : <ArrowDown size={24} style={{ color }} />}
-            </motion.div>
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+              isUp ? 'bg-emerald-500/15 border border-emerald-500/30' : 'bg-rose-500/15 border border-rose-500/30'
+            }`}>
+              {isUp
+                ? <ArrowUp className="w-5 h-5 text-emerald-400" />
+                : <ArrowDown className="w-5 h-5 text-rose-400" />
+              }
+            </div>
             <div>
-              <p className="text-sm text-muted-foreground">{signal.pair?.symbol}</p>
-              <p className="text-xl font-bold" style={{ color }}>
-                {isUp ? 'ВВЕРХ' : 'ВНИЗ'} на {formatTimeframe(signal.timeframe)}
+              <p className="text-xs text-muted-foreground">{signal.pair?.symbol}</p>
+              <p className={`text-base font-bold ${isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {isUp ? 'ВГОРУ' : 'ВНИЗ'}
               </p>
             </div>
           </div>
-          
-          {/* Таймер збоку */}
+
           <div className="text-right">
-            <motion.div
-              className="text-2xl font-mono font-bold"
-              style={{ color: timeLeft <= 10 ? '#ef4444' : color }}
-              animate={{ scale: timeLeft <= 10 ? [1, 1.1, 1] : 1 }}
-              transition={{ repeat: timeLeft <= 10 ? Infinity : 0, duration: 0.5 }}
+            <Badge variant="outline" className="text-[10px] mb-1 border-white/10 text-muted-foreground">
+              {formatTimeframe(signal.timeframe)}
+            </Badge>
+            <motion.p
+              className={`text-lg font-mono font-bold ${timeLeft <= 10 ? 'text-rose-400' : 'text-foreground'}`}
+              animate={timeLeft <= 10 ? { scale: [1, 1.05, 1] } : {}}
+              transition={{ repeat: Infinity, duration: 0.5 }}
             >
               {formatTime(timeLeft)}
-            </motion.div>
-            <p className="text-xs text-muted-foreground">залишилось</p>
+            </motion.p>
           </div>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex justify-between items-center bg-muted/30 rounded-lg p-3">
-          <div>
-            <p className="text-xs text-muted-foreground">Вхід</p>
-            <p className="text-lg font-mono font-bold">{openPrice.toFixed(5)}</p>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl bg-white/[0.03] border border-white/[0.04] p-2.5">
+            <p className="text-[10px] text-muted-foreground mb-0.5">Ціна входу</p>
+            <p className="text-sm font-mono font-semibold">{openPrice.toFixed(5)}</p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Поточна</p>
-            <motion.p 
-              className="text-lg font-mono font-bold"
+          <div className="rounded-xl bg-white/[0.03] border border-white/[0.04] p-2.5">
+            <p className="text-[10px] text-muted-foreground mb-0.5">Поточна ціна</p>
+            <motion.p
+              className={`text-sm font-mono font-semibold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}
               key={currentPrice}
-              initial={{ scale: 1.1 }}
+              initial={{ scale: 1.05 }}
               animate={{ scale: 1 }}
             >
               {currentPrice.toFixed(5)}
@@ -209,27 +166,25 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
           </div>
         </div>
 
-        {/* Прогрес бар */}
-        <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-          <motion.div 
-            className="h-full rounded-full"
-            style={{ backgroundColor: timeLeft <= 10 ? '#ef4444' : color }}
+        <div className="h-1.5 w-full bg-white/[0.04] rounded-full overflow-hidden">
+          <motion.div
+            className={`h-full rounded-full ${timeLeft <= 10 ? 'bg-rose-500' : isUp ? 'bg-emerald-500' : 'bg-rose-500'}`}
             initial={{ width: "100%" }}
             animate={{ width: `${progress}%` }}
             transition={{ ease: "linear", duration: 0.1 }}
           />
         </div>
 
-        <div className="rounded-lg overflow-hidden border border-border">
-          <TradingViewWidget symbol={signal.pair?.symbol || 'EUR/USD'} height={220} />
+        <div className="rounded-xl overflow-hidden border border-white/[0.04]">
+          <TradingViewWidget symbol={signal.pair?.symbol || 'EUR/USD'} height={180} />
         </div>
 
         {signal.analysis && (
-          <div className="text-xs text-muted-foreground bg-muted/30 rounded p-2 mt-2">
-            <span className="font-medium text-primary">AI:</span> {signal.analysis}
+          <div className="text-[11px] text-muted-foreground bg-white/[0.02] rounded-lg p-2.5 border border-white/[0.04]">
+            <span className="font-medium text-primary">ШІ:</span> {signal.analysis}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

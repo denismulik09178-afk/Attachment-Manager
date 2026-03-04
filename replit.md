@@ -33,7 +33,7 @@ This is a web application that provides AI-powered trading signals for Forex mar
 
 **Supported Forex Pairs:**
 - EUR/USD, GBP/USD, USD/JPY, USD/CHF, USD/CAD, AUD/USD
-- EUR/JPY, GBP/JPY, EUR/GBP
+- EUR/JPY, GBP/JPY, EUR/GBP, EUR/CHF
 - AUD/CAD, AUD/CHF, AUD/JPY
 - CAD/CHF, CAD/JPY, CHF/JPY
 - EUR/AUD, EUR/CAD, GBP/AUD, GBP/CAD, GBP/CHF
@@ -50,7 +50,8 @@ Preferred communication style: Simple, everyday language.
 - **Routing**: Wouter (lightweight React router)
 - **State Management**: TanStack React Query for server state with 5-second polling intervals
 - **UI Components**: shadcn/ui component library with Radix UI primitives
-- **Styling**: Tailwind CSS with dark theme optimized for trading dashboards
+- **Styling**: Tailwind CSS with dark teal/cyan theme, mobile-first design, glass-morphism effects
+- **Design**: Completely redesigned UI (March 2026) - dark background (#111318), teal/cyan accents (hsl 174 72% 46%), bottom mobile navigation, glass-card components, all Ukrainian language
 - **Charts**: Recharts for sparkline visualizations
 - **Animations**: Framer Motion for smooth transitions and layout animations
 - **Path Aliases**: `@/` maps to `client/src/`, `@shared/` maps to `shared/`
