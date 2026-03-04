@@ -112,13 +112,16 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
           <div className="flex items-center gap-2.5">
             <PairFlag symbol={signal.pair?.symbol || 'EUR/USD'} size="lg" />
             <div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <p className="text-sm font-bold">{signal.pair?.symbol}</p>
-                <Badge variant="outline" className={`text-[8px] px-1.5 py-0 h-4 ${
-                  isUp ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                <div className={`flex items-center gap-1 px-2.5 py-1 rounded-lg ${
+                  isUp ? 'bg-emerald-500/15 border border-emerald-500/30' : 'bg-rose-500/15 border border-rose-500/30'
                 }`}>
-                  {isUp ? 'ВГОРУ' : 'ВНИЗ'}
-                </Badge>
+                  {isUp ? <ArrowUp className="w-4 h-4 text-emerald-400" /> : <ArrowDown className="w-4 h-4 text-rose-400" />}
+                  <span className={`text-sm font-black tracking-wide ${isUp ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {isUp ? 'ВГОРУ' : 'ВНИЗ'}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <Badge variant="outline" className="text-[8px] px-1.5 py-0 h-3.5 border-white/10 text-muted-foreground">
