@@ -6,6 +6,15 @@ This is a web application that provides AI-powered trading signals for Forex mar
 
 ## Recent Changes (March 2026)
 
+### Pocket Option Login Gate & Component Wiring (March 4, 2026)
+- **Pocket Option ID Login**: 9-digit numeric ID required before accessing app; stored in localStorage and DB
+- **Auth Gate in App.tsx**: PocketLogin shown when no pocket_option_id in localStorage; bypassed for admin
+- **Balance Risk Calculator**: Collapsible component on dashboard; computes 1/2/3/5% of balance
+- **Currency Flag Circles**: PairFlag component shows overlapping country-code circles for base/quote currencies
+- **Signal Card AI Analysis**: AI analysis shown directly inside signal cards with Brain icon
+- **Pocket ID Header**: X-Pocket-Id sent with signal generation requests; signal count tracked per user
+- **Logout Button**: Clears localStorage and reloads page
+
 ### Major UI Redesign v2 (March 4, 2026)
 - **DENI AI BOT branding**: Header and signal generator both prominently display "DENI AI BOT"
 - **New Color Scheme**: Primary changed from teal (174) to richer green (160 84% 39%), darker background (225 25% 6%)
@@ -15,7 +24,6 @@ This is a web application that provides AI-powered trading signals for Forex mar
   - Live price ticker: EUR/USD, GBP/USD, USD/JPY, USD/CHF with % change
   - Trading tip of the day
   - Pair picker with search and favorites (starred pairs sort first)
-  - Dual buttons: "Отримати сигнал" + "Швидкий аналіз"
   - Animated indicator analysis during generation (RSI, MACD, EMA, Stoch)
 - **Market/News Page** (`/news`):
   - Trading sessions status (NY, London, Tokyo, Sydney) with active/closed indicator
@@ -62,20 +70,25 @@ Preferred communication style: Simple, everyday language.
 
 ### Data Layer
 - **Database**: PostgreSQL with Drizzle ORM
-- **Schema**: `shared/schema.ts` — users, pairs (21 entries), signals, admins, settings
+- **Schema**: `shared/schema.ts` — users, pairs (21 entries), signals, admins, settings, pocketOptionUsers
 - **Migrations**: `drizzle-kit push`
 
 ### Authentication
-- **User Sessions**: Browser-based via X-Session-Id header (no Replit Auth)
+- **User Sessions**: Pocket Option 9-digit ID login gate (stored in localStorage + DB)
 - **Admin**: Username/password login (admin/deni2024), in-memory session tokens
 
 ### Key Files
+- `client/src/App.tsx` — App root with Pocket Option auth gate
+- `client/src/pages/pocket-login.tsx` — Pocket Option ID login page
 - `client/src/pages/dashboard.tsx` — Main signal generation page
 - `client/src/pages/news.tsx` — Market overview & news
 - `client/src/pages/history.tsx` — Signal history & stats
 - `client/src/pages/admin.tsx` — Admin panel
-- `client/src/components/signal-card.tsx` — Active signal display
+- `client/src/components/signal-card.tsx` — Active signal display with AI analysis
+- `client/src/components/balance-calculator.tsx` — Risk calculator component
+- `client/src/components/pair-flag.tsx` — Currency flag circles
 - `client/src/components/layout.tsx` — App shell with header & nav
+- `client/src/lib/currency-flags.ts` — Currency color/code mapping
 - `client/src/index.css` — Theme & utility classes
 - `server/routes.ts` — All API endpoints
 - `server/smc-analysis.ts` — TradingView indicator analysis

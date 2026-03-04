@@ -141,6 +141,14 @@
   .mini-badge {
     @apply text-[9px] font-semibold px-2 py-0.5 rounded-full;
   }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @keyframes pulseGlow {

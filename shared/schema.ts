@@ -52,8 +52,17 @@ export const admins = pgTable("admins", {
   lastLogin: timestamp("last_login"),
 });
 
+export const pocketOptionUsers = pgTable("pocket_option_users", {
+  id: serial("id").primaryKey(),
+  pocketId: text("pocket_id").notNull().unique(),
+  signalCount: integer("signal_count").default(0).notNull(),
+  lastActive: timestamp("last_active").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 // Schemas
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
+export const insertPocketOptionUserSchema = createInsertSchema(pocketOptionUsers).omit({ id: true, createdAt: true, lastActive: true, signalCount: true });
 export const insertPairSchema = createInsertSchema(pairs).omit({ id: true });
 export const insertSignalSchema = createInsertSchema(signals).omit({ id: true, openTime: true, closeTime: true, result: true, status: true });
 export const insertSettingsSchema = createInsertSchema(settings).omit({ id: true });
@@ -68,6 +77,7 @@ export type InsertSignal = z.infer<typeof insertSignalSchema>;
 export type Setting = typeof settings.$inferSelect;
 export type Admin = typeof admins.$inferSelect;
 export type InsertAdmin = z.infer<typeof insertAdminSchema>;
+export type PocketOptionUser = typeof pocketOptionUsers.$inferSelect;
 
 // Enum-like constants
 export const TIMEFRAMES = [1, 3, 5];

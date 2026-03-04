@@ -1,8 +1,9 @@
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, Trophy, XCircle, Timer, Clock, Target, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowUp, ArrowDown, Trophy, XCircle, Timer, Clock, Target, TrendingUp, TrendingDown, Brain } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState, useCallback } from "react";
 import { TradingViewWidget } from "./tradingview-widget";
+import { PairFlag } from "./pair-flag";
 
 interface SignalCardProps {
   signal: any;
@@ -86,7 +87,10 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
           >
             <cfg.icon className={`h-12 w-12 ${cfg.color}`} />
             <h2 className={`text-2xl font-black ${cfg.color}`}>{cfg.label}</h2>
-            <p className="text-xs text-muted-foreground font-medium">{signal.pair?.symbol}</p>
+            <div className="flex items-center gap-2">
+              <PairFlag symbol={signal.pair?.symbol || 'EUR/USD'} size="sm" />
+              <p className="text-xs text-muted-foreground font-medium">{signal.pair?.symbol}</p>
+            </div>
             <div className="flex items-center gap-4 text-[10px] text-muted-foreground mt-1">
               <span>Вхід: {openPrice.toFixed(5)}</span>
               <span>Закриття: {currentPrice.toFixed(5)}</span>
@@ -106,14 +110,7 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
       <div className="p-3 space-y-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-              isUp ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-rose-500/10 border border-rose-500/20'
-            }`}>
-              {isUp
-                ? <ArrowUp className="w-5 h-5 text-emerald-400" strokeWidth={3} />
-                : <ArrowDown className="w-5 h-5 text-rose-400" strokeWidth={3} />
-              }
-            </div>
+            <PairFlag symbol={signal.pair?.symbol || 'EUR/USD'} size="lg" />
             <div>
               <div className="flex items-center gap-1.5">
                 <p className="text-sm font-bold">{signal.pair?.symbol}</p>
@@ -129,7 +126,7 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
                   {formatTimeframe(signal.timeframe)}
                 </Badge>
                 <span className={`text-[9px] font-semibold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
-                  {isProfit ? '+' : '-'}{pips} піпсів
+                  {isProfit ? '+' : '-'}{pips} pips
                 </span>
               </div>
             </div>
@@ -151,6 +148,18 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
             </div>
           </div>
         </div>
+
+        {signal.analysis && (
+          <div className="p-2.5 rounded-xl bg-primary/5 border border-primary/10">
+            <div className="flex items-start gap-2">
+              <Brain className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+              <div>
+                <p className="text-[9px] font-bold text-primary mb-0.5">ШІ Аналіз</p>
+                <p className="text-[10px] text-foreground/70 leading-relaxed">{signal.analysis}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-3 gap-1.5">
           <div className="rounded-lg bg-white/[0.025] border border-white/[0.04] p-2">
@@ -187,12 +196,6 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
         <div className="rounded-xl overflow-hidden border border-white/[0.04]">
           <TradingViewWidget symbol={signal.pair?.symbol || 'EUR/USD'} height={160} />
         </div>
-
-        {signal.analysis && (
-          <div className="text-[10px] text-muted-foreground bg-white/[0.02] rounded-lg p-2 border border-white/[0.04]">
-            <span className="font-bold text-primary">ШІ:</span> {signal.analysis}
-          </div>
-        )}
       </div>
     </div>
   );

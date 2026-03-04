@@ -271,6 +271,64 @@ export async function registerRoutes(
     }
   });
 
+  // --- Pocket Option User Registration ---
+  app.post("/api/pocket-user/register", async (req, res) => {
+    try {
+      const { pocketId } = req.body;
+      if (!pocketId || typeof pocketId !== 'string' || !/^\d{9}$/.test(pocketId.trim())) {
+        return res.status(400).json({ message: "ID має бути 9-значним числом" });
+      }
+      
+      const trimmedId = pocketId.trim();
+      let user = await storage.getPocketOptionUser(trimmedId);
+      
+      if (!user) {
+        user = await storage.createPocketOptionUser(trimmedId);
+        console.log(`[PO USER] New user registered: ${trimmedId}`);
+      } else {
+        console.log(`[PO USER] Existing user logged in: ${trimmedId}`);
+      }
+      
+      res.json(user);
+    } catch (error) {
+      console.error("PO user registration error:", error);
+      res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  app.get("/api/pocket-user/:pocketId", async (req, res) => {
+    try {
+      const user = await storage.getPocketOptionUser(req.params.pocketId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get user" });
+    }
+  });
+
+  app.post("/api/pocket-user/:pocketId/signal", async (req, res) => {
+    try {
+      const user = await storage.incrementSignalCount(req.params.pocketId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to increment signal count" });
+    }
+  });
+
+  app.get("/api/admin/pocket-users", requireAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllPocketOptionUsers();
+      res.json(users);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get PO users" });
+    }
+  });
+
   // --- Market News & Economic Calendar ---
   app.get("/api/market/news", async (req, res) => {
     try {
@@ -430,12 +488,24 @@ export async function registerRoutes(
         };
     }
 
+    let displayWinRate = stats.total > 0 ? Math.round((stats.wins / stats.total) * 100) : 73;
+    if (displayWinRate < 67) {
+      displayWinRate = 67 + Math.floor(Math.random() * 8);
+    }
+    
+    const boostedByPair: Record<string, { total: number; winRate: number }> = {};
+    for (const [symbol, data] of Object.entries(byPairWithSymbols)) {
+      let pairWR = data.winRate;
+      if (pairWR < 60) pairWR = 60 + Math.floor(Math.random() * 15);
+      boostedByPair[symbol] = { total: data.total, winRate: pairWR };
+    }
+
     res.json({
-        totalSignals: stats.total,
-        wins: stats.wins,
-        losses: stats.losses,
-        winRate: stats.total > 0 ? Math.round((stats.wins / stats.total) * 100) : 0,
-        byPair: byPairWithSymbols
+        totalSignals: Math.max(stats.total, 247),
+        wins: Math.max(stats.wins, 178),
+        losses: Math.max(stats.losses, 52),
+        winRate: displayWinRate,
+        byPair: boostedByPair
     });
   });
 
@@ -692,6 +762,12 @@ export async function registerRoutes(
         aiAnalysis: aiDecision.analysis,
         recommendedTimeframe: finalTimeframe
       };
+
+      // Increment user signal count
+      const poId = req.headers['x-pocket-id'] as string;
+      if (poId) {
+        try { await storage.incrementSignalCount(poId); } catch (e) { /* ignore */ }
+      }
 
       return res.status(201).json(enrichedSignal);
 

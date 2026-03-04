@@ -1,5 +1,5 @@
 
-import { users, pairs, signals, settings, admins, type User, type InsertUser, type Pair, type Signal, type InsertSignal, type Setting, type Admin, type InsertAdmin } from "@shared/schema";
+import { users, pairs, signals, settings, admins, pocketOptionUsers, type User, type InsertUser, type Pair, type Signal, type InsertSignal, type Setting, type Admin, type InsertAdmin, type PocketOptionUser } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, sql, count } from "drizzle-orm";
 
@@ -41,6 +41,12 @@ export interface IStorage {
   getAllSignalsCount(): Promise<number>;
   getUniqueUsersCount(): Promise<number>;
   getTodaySignalsCount(): Promise<number>;
+
+  // Pocket Option Users
+  getPocketOptionUser(pocketId: string): Promise<PocketOptionUser | undefined>;
+  createPocketOptionUser(pocketId: string): Promise<PocketOptionUser>;
+  incrementSignalCount(pocketId: string): Promise<PocketOptionUser>;
+  getAllPocketOptionUsers(): Promise<PocketOptionUser[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -230,6 +236,31 @@ export class DatabaseStorage implements IStorage {
       .from(signals)
       .where(gte(signals.openTime, startOfDay));
     return result[0]?.count || 0;
+  }
+
+  async getPocketOptionUser(pocketId: string): Promise<PocketOptionUser | undefined> {
+    const [user] = await db.select().from(pocketOptionUsers).where(eq(pocketOptionUsers.pocketId, pocketId));
+    return user;
+  }
+
+  async createPocketOptionUser(pocketId: string): Promise<PocketOptionUser> {
+    const [user] = await db.insert(pocketOptionUsers).values({ pocketId }).returning();
+    return user;
+  }
+
+  async incrementSignalCount(pocketId: string): Promise<PocketOptionUser> {
+    const [user] = await db.update(pocketOptionUsers)
+      .set({ 
+        signalCount: sql`${pocketOptionUsers.signalCount} + 1`,
+        lastActive: new Date()
+      })
+      .where(eq(pocketOptionUsers.pocketId, pocketId))
+      .returning();
+    return user;
+  }
+
+  async getAllPocketOptionUsers(): Promise<PocketOptionUser[]> {
+    return await db.select().from(pocketOptionUsers).orderBy(desc(pocketOptionUsers.lastActive));
   }
 }
 
