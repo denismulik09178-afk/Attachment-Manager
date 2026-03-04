@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { format } from "date-fns";
+import { uk } from "date-fns/locale";
 import {
   Shield,
   LogOut,
@@ -20,7 +22,12 @@ import {
   RotateCcw,
   EyeOff,
   Users,
-  Bot
+  Bot,
+  Hash,
+  ChevronDown,
+  ArrowUp,
+  ArrowDown,
+  Trophy
 } from "lucide-react";
 
 const ADMIN_TOKEN_KEY = "deni_admin_token";
@@ -165,6 +172,7 @@ function AdminDashboard({ adminUsername, onLogout }: { adminUsername: string; on
   const [showSecretPanel, setShowSecretPanel] = useState(false);
   const [clickCount, setClickCount] = useState(0);
   const [targetWinRate, setTargetWinRate] = useState("");
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
   const handleTitleClick = () => {
     const newCount = clickCount + 1;
@@ -192,6 +200,27 @@ function AdminDashboard({ adminUsername, onLogout }: { adminUsername: string; on
       if (!res.ok) throw new Error("Failed to fetch pairs");
       return res.json();
     },
+  });
+
+  const { data: pocketUsers, isLoading: pocketUsersLoading } = useQuery<any[]>({
+    queryKey: ["/api/admin/pocket-users"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/pocket-users", { headers: { "X-Admin-Token": token } });
+      if (!res.ok) throw new Error("Failed to fetch pocket users");
+      return res.json();
+    },
+    refetchInterval: 15000,
+  });
+
+  const { data: userSignals } = useQuery<any[]>({
+    queryKey: ["/api/admin/pocket-users", expandedUser, "signals"],
+    queryFn: async () => {
+      if (!expandedUser) return [];
+      const res = await fetch(`/api/admin/pocket-users/${expandedUser}/signals`, { headers: { "X-Admin-Token": token } });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!expandedUser,
   });
 
   const togglePairMutation = useMutation({
@@ -332,14 +361,106 @@ function AdminDashboard({ adminUsername, onLogout }: { adminUsername: string; on
         </div>
 
         <div className="glass-card rounded-2xl p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-muted-foreground" />
-            <p className="text-xs font-semibold">Користувачі</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary" />
+              <p className="text-xs font-semibold">Pocket Option користувачі</p>
+            </div>
+            <Badge variant="outline" className="text-[10px] border-white/10 text-muted-foreground">
+              {pocketUsers?.length || 0} всього
+            </Badge>
           </div>
-          <p className="text-2xl font-bold" data-testid="text-users">
-            {statsLoading ? "..." : stats?.users.unique || 0}
-          </p>
-          <p className="text-[10px] text-muted-foreground">Унікальних користувачів</p>
+
+          {pocketUsersLoading ? (
+            <p className="text-xs text-muted-foreground">Завантаження...</p>
+          ) : !pocketUsers || pocketUsers.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Немає зареєстрованих користувачів</p>
+          ) : (
+            <div className="space-y-1.5">
+              {pocketUsers.map((user: any) => {
+                const isExpanded = expandedUser === user.pocketId;
+                return (
+                  <div key={user.id} className="rounded-xl border border-white/[0.06] overflow-hidden" data-testid={`pocket-user-${user.pocketId}`}>
+                    <button
+                      onClick={() => setExpandedUser(isExpanded ? null : user.pocketId)}
+                      className="w-full flex items-center justify-between p-3 bg-white/[0.02] hover:bg-white/[0.04] transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                          <Hash className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm font-mono font-bold">{user.pocketId}</p>
+                          <p className="text-[9px] text-muted-foreground">
+                            Зареєстровано: {format(new Date(user.createdAt), 'dd.MM.yyyy HH:mm', { locale: uk })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-primary">{user.signalCount}</p>
+                          <p className="text-[8px] text-muted-foreground">сигналів</p>
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="border-t border-white/[0.06] p-3 space-y-2 bg-white/[0.01]">
+                        <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+                          <span>Останній вхід: {format(new Date(user.lastActive), 'dd.MM.yyyy HH:mm', { locale: uk })}</span>
+                        </div>
+
+                        {!userSignals || userSignals.length === 0 ? (
+                          <p className="text-[10px] text-muted-foreground py-2 text-center">Немає угод</p>
+                        ) : (
+                          <div className="space-y-1">
+                            <p className="text-[10px] font-semibold text-muted-foreground">Останні угоди:</p>
+                            {userSignals.map((sig: any) => {
+                              const isUp = sig.direction === 'UP';
+                              const resultCfg = sig.result === 'WIN'
+                                ? { color: 'text-emerald-400', bg: 'bg-emerald-500/10', label: 'WIN' }
+                                : sig.result === 'LOSE'
+                                  ? { color: 'text-rose-400', bg: 'bg-rose-500/10', label: 'LOSE' }
+                                  : sig.result === 'DRAW'
+                                    ? { color: 'text-amber-400', bg: 'bg-amber-500/10', label: 'DRAW' }
+                                    : { color: 'text-blue-400', bg: 'bg-blue-500/10', label: 'ACTIVE' };
+                              return (
+                                <div key={sig.id} className="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]" data-testid={`user-signal-${sig.id}`}>
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-5 h-5 rounded flex items-center justify-center ${isUp ? 'bg-emerald-500/10' : 'bg-rose-500/10'}`}>
+                                      {isUp ? <ArrowUp className="w-3 h-3 text-emerald-400" /> : <ArrowDown className="w-3 h-3 text-rose-400" />}
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] font-semibold">{sig.pairSymbol || '—'}</p>
+                                      <p className="text-[8px] text-muted-foreground">
+                                        {format(new Date(sig.openTime), 'dd.MM HH:mm', { locale: uk })} · {sig.timeframe}хв
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-right text-[9px] font-mono">
+                                      <span className="text-muted-foreground">{parseFloat(sig.openPrice).toFixed(5)}</span>
+                                      {sig.closePrice && (
+                                        <span className="text-muted-foreground"> → {parseFloat(sig.closePrice).toFixed(5)}</span>
+                                      )}
+                                    </div>
+                                    <Badge variant="outline" className={`text-[8px] px-1.5 py-0 h-4 border-transparent ${resultCfg.bg} ${resultCfg.color}`}>
+                                      {resultCfg.label}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="glass-card rounded-2xl p-4 space-y-3">

@@ -47,6 +47,7 @@ export interface IStorage {
   createPocketOptionUser(pocketId: string): Promise<PocketOptionUser>;
   incrementSignalCount(pocketId: string): Promise<PocketOptionUser>;
   getAllPocketOptionUsers(): Promise<PocketOptionUser[]>;
+  getSignalsByPocketId(pocketId: string): Promise<any[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -261,6 +262,28 @@ export class DatabaseStorage implements IStorage {
 
   async getAllPocketOptionUsers(): Promise<PocketOptionUser[]> {
     return await db.select().from(pocketOptionUsers).orderBy(desc(pocketOptionUsers.lastActive));
+  }
+
+  async getSignalsByPocketId(pocketId: string): Promise<any[]> {
+    return await db
+      .select({
+        id: signals.id,
+        pairId: signals.pairId,
+        direction: signals.direction,
+        timeframe: signals.timeframe,
+        openPrice: signals.openPrice,
+        closePrice: signals.closePrice,
+        result: signals.result,
+        status: signals.status,
+        openTime: signals.openTime,
+        closeTime: signals.closeTime,
+        pairSymbol: pairs.symbol,
+      })
+      .from(signals)
+      .leftJoin(pairs, eq(signals.pairId, pairs.id))
+      .where(eq(signals.pocketId, pocketId))
+      .orderBy(desc(signals.openTime))
+      .limit(50);
   }
 }
 

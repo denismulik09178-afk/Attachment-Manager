@@ -74,8 +74,10 @@ Preferred communication style: Simple, everyday language.
 - **Migrations**: `drizzle-kit push`
 
 ### Authentication
-- **User Sessions**: Pocket Option 9-digit ID login gate (stored in localStorage + DB)
+- **User Sessions**: Pocket Option 9-digit ID login gate (stored in localStorage + DB); `/admin` bypasses login gate
 - **Admin**: Username/password login (admin/deni2024), in-memory session tokens
+- **Signal-User Linking**: Signals store `pocketId` column, linking trades to Pocket Option users
+- **Admin Pocket Users**: `/api/admin/pocket-users` lists all users; `/api/admin/pocket-users/:id/signals` lists their trades
 
 ### Key Files
 - `client/src/App.tsx` — App root with Pocket Option auth gate

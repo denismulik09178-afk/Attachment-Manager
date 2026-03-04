@@ -329,6 +329,15 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/admin/pocket-users/:pocketId/signals", requireAdmin, async (req, res) => {
+    try {
+      const signals = await storage.getSignalsByPocketId(req.params.pocketId);
+      res.json(signals);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get user signals" });
+    }
+  });
+
   // --- Market News & Economic Calendar ---
   app.get("/api/market/news", async (req, res) => {
     try {
@@ -744,9 +753,11 @@ export async function registerRoutes(
       
       console.log(`[AI SIGNAL] ${pair.symbol}: ${dirText} ${confidence}% | Таймфрейм: ${finalTimeframe}хв`);
       
+      const pocketIdHeader = req.headers['x-pocket-id'] as string || null;
       const signal = await storage.createSignal({
         pairId,
         ownerId,
+        pocketId: pocketIdHeader,
         direction,
         timeframe: finalTimeframe,
         openPrice: currentPrice.toFixed(5),

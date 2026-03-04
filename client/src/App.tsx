@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import HistoryPage from "@/pages/history";
@@ -37,12 +38,13 @@ function App() {
   const [pocketId, setPocketId] = useState<string | null>(() => {
     return localStorage.getItem('pocket_option_id');
   });
+  const [location] = useLocation();
 
   const handleLogin = (id: string) => {
     setPocketId(id);
   };
 
-  if (!pocketId) {
+  if (!pocketId && location !== '/admin') {
     return (
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>

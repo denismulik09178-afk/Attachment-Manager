@@ -22,7 +22,8 @@ export const pairs = pgTable("pairs", {
 export const signals = pgTable("signals", {
   id: serial("id").primaryKey(),
   pairId: integer("pair_id").references(() => pairs.id).notNull(),
-  ownerId: text("owner_id"), // Replit Auth user ID (string) for signal ownership
+  ownerId: text("owner_id"),
+  pocketId: text("pocket_id"),
   direction: text("direction").notNull(), // 'UP' or 'DOWN'
   timeframe: integer("timeframe").notNull(), // in minutes: 1, 3, 5
   openPrice: decimal("open_price").notNull(),
