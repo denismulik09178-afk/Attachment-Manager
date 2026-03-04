@@ -5,6 +5,7 @@ import {
   Globe, Clock, TrendingUp, TrendingDown, Gauge, 
   AlertTriangle, Calendar, Lightbulb, Radio, Flame, BarChart3, Moon
 } from "lucide-react";
+import { PairFlag } from "@/components/pair-flag";
 
 export default function NewsPage() {
   const { data: marketData, isLoading } = useQuery({
@@ -121,23 +122,19 @@ export default function NewsPage() {
                 {overview.pairs.map((p: any) => {
                   const isPositive = parseFloat(p.change) >= 0;
                   return (
-                    <div key={p.symbol} data-testid={`overview-pair-${p.symbol}`} className="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-6 h-6 rounded-md flex items-center justify-center ${
-                          isPositive ? 'bg-emerald-500/10' : 'bg-rose-500/10'
-                        }`}>
-                          {isPositive
-                            ? <TrendingUp className="w-3 h-3 text-emerald-400" />
-                            : <TrendingDown className="w-3 h-3 text-rose-400" />
-                          }
+                    <div key={p.symbol} data-testid={`overview-pair-${p.symbol}`} className="flex items-center justify-between p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                      <div className="flex items-center gap-2.5">
+                        <PairFlag symbol={p.symbol} size="md" />
+                        <div>
+                          <p className="text-xs font-semibold">{p.symbol}</p>
+                          <p className={`text-[9px] font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {isPositive ? <TrendingUp className="w-2.5 h-2.5 inline mr-0.5" /> : <TrendingDown className="w-2.5 h-2.5 inline mr-0.5" />}
+                            {isPositive ? '+' : ''}{p.change}%
+                          </p>
                         </div>
-                        <p className="text-xs font-semibold">{p.symbol}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xs font-mono font-bold">{p.price}</p>
-                        <p className={`text-[9px] font-semibold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {isPositive ? '+' : ''}{p.change}%
-                        </p>
+                        <p className="text-sm font-mono font-bold">{p.price}</p>
                       </div>
                     </div>
                   );

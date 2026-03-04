@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { ArrowUp, ArrowDown, History, Trophy, XCircle, Minus, BarChart3, Target, TrendingUp } from "lucide-react";
 import { motion } from "framer-motion";
+import { PairFlag } from "@/components/pair-flag";
 
 export default function HistoryPage() {
   const { data: signals, isLoading } = useSignals({ status: 'closed', limit: 50 });
@@ -67,7 +68,10 @@ export default function HistoryPage() {
           <div className="grid grid-cols-2 gap-1.5">
             {Object.entries(stats.byPair).map(([symbol, data]: any) => (
               <div key={symbol} className="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
-                <p className="text-[10px] font-semibold">{symbol}</p>
+                <div className="flex items-center gap-1.5">
+                  <PairFlag symbol={symbol} size="sm" />
+                  <p className="text-[10px] font-semibold">{symbol}</p>
+                </div>
                 <div className="flex items-center gap-1.5">
                   <span className="text-[9px] text-muted-foreground">{data.total}</span>
                   <span className={`text-[9px] font-bold ${data.winRate >= 60 ? 'text-emerald-400' : data.winRate >= 40 ? 'text-amber-400' : 'text-rose-400'}`}>
@@ -111,17 +115,15 @@ export default function HistoryPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
-                      isUp ? 'bg-emerald-500/10 border border-emerald-500/15' : 'bg-rose-500/10 border border-rose-500/15'
-                    }`}>
-                      {isUp
-                        ? <ArrowUp className="w-3.5 h-3.5 text-emerald-400" />
-                        : <ArrowDown className="w-3.5 h-3.5 text-rose-400" />
-                      }
-                    </div>
+                    <PairFlag symbol={signal.pair?.symbol || ''} size="sm" />
                     <div>
                       <div className="flex items-center gap-1.5">
                         <p className="text-xs font-bold">{signal.pair?.symbol}</p>
+                        <Badge variant="outline" className={`text-[7px] px-1 py-0 h-3 border-transparent ${
+                          isUp ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                        }`}>
+                          {isUp ? '↑' : '↓'}
+                        </Badge>
                         <Badge variant="outline" className={`text-[8px] px-1.5 py-0 h-3.5 border-transparent ${cfg.bg} ${cfg.color}`}>
                           <cfg.icon className="w-2 h-2 mr-0.5" />
                           {cfg.label}
