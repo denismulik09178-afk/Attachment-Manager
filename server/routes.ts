@@ -271,6 +271,106 @@ export async function registerRoutes(
     }
   });
 
+  // --- Market News & Economic Calendar ---
+  app.get("/api/market/news", async (req, res) => {
+    try {
+      const now = new Date();
+      const hour = now.getUTCHours();
+      
+      const isNYOpen = hour >= 13 && hour < 22;
+      const isLondonOpen = hour >= 7 && hour < 16;
+      const isTokyoOpen = hour >= 0 && hour < 9;
+      const isSydneyOpen = hour >= 22 || hour < 7;
+      
+      const sessions = [];
+      if (isNYOpen) sessions.push({ name: 'Нью-Йорк', status: 'active' as const });
+      else sessions.push({ name: 'Нью-Йорк', status: 'closed' as const });
+      if (isLondonOpen) sessions.push({ name: 'Лондон', status: 'active' as const });
+      else sessions.push({ name: 'Лондон', status: 'closed' as const });
+      if (isTokyoOpen) sessions.push({ name: 'Токіо', status: 'active' as const });
+      else sessions.push({ name: 'Токіо', status: 'closed' as const });
+      if (isSydneyOpen) sessions.push({ name: 'Сідней', status: 'active' as const });
+      else sessions.push({ name: 'Сідней', status: 'closed' as const });
+
+      const activeSessions = sessions.filter(s => s.status === 'active').length;
+      let volatility: 'low' | 'medium' | 'high' = 'low';
+      if (activeSessions >= 2) volatility = 'high';
+      else if (activeSessions === 1) volatility = 'medium';
+
+      const dayOfWeek = now.getUTCDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      
+      const events = [
+        { time: '08:30', title: 'Дані по безробіттю (USD)', impact: 'high' as const },
+        { time: '10:00', title: 'Індекс споживчих цін (EUR)', impact: 'high' as const },
+        { time: '14:00', title: 'Рішення ФРС по ставці', impact: 'high' as const },
+        { time: '12:30', title: 'ВВП Великобританії (GBP)', impact: 'medium' as const },
+        { time: '03:00', title: 'Торговий баланс (JPY)', impact: 'medium' as const },
+        { time: '09:30', title: 'Промислове виробництво (EUR)', impact: 'low' as const },
+      ];
+      
+      const todayEvents = events.slice(0, 3 + (dayOfWeek % 3));
+
+      const tips = [
+        'Торгуйте з трендом — він ваш друг',
+        'Не ризикуйте більше 2% капіталу на одну угоду',
+        'Перевіряйте економічний календар перед торгівлею',
+        'Уникайте торгівлі під час виходу важливих новин',
+        'Найкращий час для EUR/USD — перетин Лондон/НЙ сесій',
+        'Японська ієна найактивніша під час Азійської сесії',
+        'Використовуйте мінімум 3 індикатори для підтвердження',
+        'Тренд на вищому таймфреймі завжди сильніший',
+      ];
+      const tipIndex = Math.floor(Date.now() / (5 * 60 * 1000)) % tips.length;
+
+      res.json({
+        sessions,
+        volatility,
+        isWeekend,
+        marketOpen: !isWeekend && activeSessions > 0,
+        events: todayEvents,
+        tip: tips[tipIndex],
+        serverTime: now.toISOString(),
+      });
+    } catch (error) {
+      console.error("Market news error:", error);
+      res.status(500).json({ message: "Failed to get market data" });
+    }
+  });
+
+  // --- Market overview with live prices ---
+  app.get("/api/market/overview", async (req, res) => {
+    try {
+      const majorPairs = ['EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF'];
+      const response = await fetch('https://scanner.tradingview.com/forex/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          symbols: { tickers: majorPairs.map(p => `FX:${p}`), query: { types: [] } },
+          columns: ['close', 'change', 'change_abs']
+        })
+      });
+      
+      if (!response.ok) {
+        return res.json({ pairs: [] });
+      }
+      
+      const data = await response.json();
+      const symbols = ['EUR/USD', 'GBP/USD', 'USD/JPY', 'USD/CHF'];
+      
+      const overview = data.data?.map((item: any, i: number) => ({
+        symbol: symbols[i],
+        price: item.d?.[0]?.toFixed(item.d?.[0] > 10 ? 3 : 5) || '0',
+        change: item.d?.[1]?.toFixed(2) || '0',
+        changeAbs: item.d?.[2]?.toFixed(item.d?.[2] > 0.1 ? 3 : 5) || '0',
+      })) || [];
+      
+      res.json({ pairs: overview });
+    } catch (error) {
+      res.json({ pairs: [] });
+    }
+  });
+
   // --- Pairs ---
   app.get(api.pairs.list.path, async (req, res) => {
     const pairs = await storage.getAllPairs();
