@@ -275,50 +275,95 @@ export default function Dashboard() {
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className="space-y-2 pb-1">
+                  <div className="space-y-2.5 pb-1">
                     <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <input
                         type="text"
                         placeholder="Пошук пари..."
                         value={searchPair}
                         onChange={(e) => setSearchPair(e.target.value)}
-                        className="w-full pl-8 pr-3 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/30"
+                        className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06] text-xs placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/30"
                         data-testid="input-search-pair"
                       />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-1.5 max-h-[220px] overflow-y-auto pr-0.5">
-                      {sortedPairs.map((pair: any) => {
+                    {favorites.length > 0 && !searchPair && (
+                      <div>
+                        <p className="text-[9px] text-amber-400 font-semibold mb-1.5 flex items-center gap-1">
+                          <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> Обрані
+                        </p>
+                        <div className="space-y-1">
+                          {enabledPairs.filter((p: any) => favorites.includes(String(p.id))).map((pair: any) => {
+                            const isSelected = selectedPair === String(pair.id);
+                            return (
+                              <button
+                                key={pair.id}
+                                onClick={() => { setSelectedPair(String(pair.id)); setShowPairs(false); setSearchPair(''); }}
+                                data-testid={`pair-${pair.symbol}`}
+                                className={`w-full flex items-center justify-between p-2.5 rounded-xl transition-all active:scale-[0.98] ${
+                                  isSelected
+                                    ? 'gradient-accent text-background shadow-lg shadow-primary/20'
+                                    : 'bg-amber-500/5 border border-amber-500/10 hover:border-amber-500/20'
+                                }`}
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <PairFlag symbol={pair.symbol} size="sm" />
+                                  <div className="text-left">
+                                    <p className={`text-xs font-bold ${isSelected ? '' : 'text-foreground'}`}>{pair.symbol}</p>
+                                    <p className={`text-[9px] ${isSelected ? 'text-background/70' : 'text-muted-foreground'}`}>{pair.name}</p>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); toggleFavorite(String(pair.id)); }}
+                                  className="p-1"
+                                  data-testid={`fav-${pair.symbol}`}
+                                >
+                                  <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                                </button>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="max-h-[280px] overflow-y-auto space-y-1 scrollbar-hide">
+                      {!searchPair && favorites.length > 0 && (
+                        <p className="text-[9px] text-muted-foreground font-semibold mb-1 mt-1">Всі пари</p>
+                      )}
+                      {sortedPairs.filter((p: any) => searchPair || !favorites.includes(String(p.id))).map((pair: any) => {
                         const isFav = favorites.includes(String(pair.id));
                         const isSelected = selectedPair === String(pair.id);
                         return (
-                          <div key={pair.id} className="relative">
-                            <button
-                              onClick={() => { setSelectedPair(String(pair.id)); setShowPairs(false); setSearchPair(''); }}
-                              data-testid={`pair-${pair.symbol}`}
-                              className={`w-full py-2 px-1 rounded-lg text-[10px] font-semibold transition-all active:scale-95 flex flex-col items-center gap-1 ${
-                                isSelected
-                                  ? 'gradient-accent text-background shadow-lg shadow-primary/20'
-                                  : isFav
-                                    ? 'bg-primary/8 text-primary border border-primary/15'
-                                    : 'bg-white/[0.03] text-muted-foreground border border-white/[0.04] hover:border-white/[0.08]'
-                              }`}
-                            >
+                          <button
+                            key={pair.id}
+                            onClick={() => { setSelectedPair(String(pair.id)); setShowPairs(false); setSearchPair(''); }}
+                            data-testid={`pair-${pair.symbol}`}
+                            className={`w-full flex items-center justify-between p-2.5 rounded-xl transition-all active:scale-[0.98] ${
+                              isSelected
+                                ? 'gradient-accent text-background shadow-lg shadow-primary/20'
+                                : 'bg-white/[0.02] border border-white/[0.04] hover:border-white/[0.08] hover:bg-white/[0.04]'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
                               <PairFlag symbol={pair.symbol} size="sm" />
-                              {pair.symbol}
-                            </button>
+                              <div className="text-left">
+                                <p className={`text-xs font-bold ${isSelected ? '' : 'text-foreground'}`}>{pair.symbol}</p>
+                                <p className={`text-[9px] ${isSelected ? 'text-background/70' : 'text-muted-foreground'}`}>{pair.name}</p>
+                              </div>
+                            </div>
                             <button
                               onClick={(e) => { e.stopPropagation(); toggleFavorite(String(pair.id)); }}
-                              className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-card border border-white/10 flex items-center justify-center"
+                              className="p-1.5 rounded-lg hover:bg-white/[0.06] transition-colors"
                               data-testid={`fav-${pair.symbol}`}
                             >
                               {isFav
-                                ? <Star className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
-                                : <StarOff className="w-2.5 h-2.5 text-muted-foreground/40" />
+                                ? <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                                : <StarOff className="w-3.5 h-3.5 text-muted-foreground/30" />
                               }
                             </button>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
