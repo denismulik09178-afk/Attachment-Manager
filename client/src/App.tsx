@@ -13,6 +13,7 @@ import NewsPage from "@/pages/news";
 import AdminPage from "@/pages/admin";
 import PocketLogin from "@/pages/pocket-login";
 import { Layout } from "@/components/layout";
+import { AnimatedBackground } from "@/components/animated-background";
 
 function Router() {
   return (
@@ -48,6 +49,7 @@ function App() {
     return (
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
+          <AnimatedBackground />
           <Toaster />
           <PocketLogin onLogin={handleLogin} />
         </TooltipProvider>
@@ -58,6 +60,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <AnimatedBackground />
         <Toaster />
         <Router />
       </TooltipProvider>
