@@ -180,7 +180,7 @@ function analyzeEightIndicators(ind: Indicators): EightIndicatorAnalysis {
   const downCount = results.filter(r => r.direction === 'DOWN').length;
   const EXPECTED_INDICATORS = 8;
 
-  const MIN_AGREEMENT = 5;
+  const MIN_AGREEMENT = 4;
   let direction: 'UP' | 'DOWN' | null = null;
   let agreementCount = 0;
 
@@ -366,7 +366,8 @@ function calculateFinalConfidence(
   eightInd: EightIndicatorAnalysis,
   mtf: MultiTimeframeAnalysis,
   sources: ExternalVerification,
-  smc: SMCAnalysisResult
+  smc: SMCAnalysisResult,
+  direction: 'UP' | 'DOWN'
 ): number {
   let confidence = 0;
 
@@ -377,9 +378,14 @@ function calculateFinalConfidence(
   }
 
   const mtfWeight = 25;
-  if (mtf.confirmed) {
+  if (mtf.confirmed && mtf.confirmedDirection === direction) {
     const ratio = mtf.agreementCount / 3;
     confidence += mtfWeight * ratio;
+  } else if (mtf.confirmed && mtf.confirmedDirection !== direction) {
+    confidence += mtfWeight * 0.15;
+  } else {
+    const sameDir = mtf.timeframes.filter(t => t.direction === direction).length;
+    confidence += mtfWeight * (sameDir / 3) * 0.7;
   }
 
   const sourceWeight = 20;
@@ -391,6 +397,8 @@ function calculateFinalConfidence(
   const smcWeight = 15;
   if (smc.shouldTrade) {
     confidence += smcWeight * (smc.confluence.total / 100);
+  } else {
+    confidence += smcWeight * 0.3;
   }
 
   return Math.round(Math.min(100, Math.max(0, confidence)));
@@ -400,7 +408,7 @@ function determineExpiration(confidence: number, signalStrength: string): number
   if (signalStrength === 'STRONG') {
     return confidence >= 95 ? 10 : 5;
   } else if (signalStrength === 'MEDIUM') {
-    return confidence >= 85 ? 5 : 3;
+    return confidence >= 80 ? 5 : 3;
   }
   return 3;
 }
@@ -453,79 +461,23 @@ export async function runSignalEngine(
       signalStrength: 'NONE',
       recommendedExpiration: 0,
       shouldTrade: false,
-      rejectReason: `Недостатньо індикаторів: ${eightIndicators.agreementCount}/8 (потрібно 5+)`,
+      rejectReason: `Недостатньо індикаторів: ${eightIndicators.agreementCount}/8 (потрібно 4+)`,
       summary: `❌ ${eightIndicators.agreementCount}/8 індикаторів - недостатньо для сигналу`,
-    };
-  }
-
-  if (!multiTimeframe.confirmed) {
-    return {
-      symbol,
-      price: smcAnalysis.indicators.close || 0,
-      smcAnalysis,
-      eightIndicators,
-      multiTimeframe,
-      externalSources: { sources: [], sourcesConfirmed: 0, sourcesTotal: 0, majorityDirection: null, verified: false, summary: '' },
-      newsFilter,
-      finalConfidence: 0,
-      finalDirection: null,
-      signalStrength: 'NONE',
-      recommendedExpiration: 0,
-      shouldTrade: false,
-      rejectReason: `Таймфрейми не підтверджують: ${multiTimeframe.agreementCount}/3 (потрібно 2+)`,
-      summary: `❌ Лише ${multiTimeframe.agreementCount}/3 таймфрейми підтверджують`,
-    };
-  }
-
-  if (eightIndicators.direction !== multiTimeframe.confirmedDirection) {
-    return {
-      symbol,
-      price: smcAnalysis.indicators.close || 0,
-      smcAnalysis,
-      eightIndicators,
-      multiTimeframe,
-      externalSources: { sources: [], sourcesConfirmed: 0, sourcesTotal: 0, majorityDirection: null, verified: false, summary: '' },
-      newsFilter,
-      finalConfidence: 0,
-      finalDirection: null,
-      signalStrength: 'NONE',
-      recommendedExpiration: 0,
-      shouldTrade: false,
-      rejectReason: `Конфлікт: індикатори (${eightIndicators.direction}) ≠ таймфрейми (${multiTimeframe.confirmedDirection})`,
-      summary: `❌ Конфлікт між індикаторами та таймфреймами`,
     };
   }
 
   const direction = eightIndicators.direction!;
   const externalSources = await verifyExternalSources(symbol, direction);
 
-  if (!externalSources.verified) {
-    return {
-      symbol,
-      price: smcAnalysis.indicators.close || 0,
-      smcAnalysis,
-      eightIndicators,
-      multiTimeframe,
-      externalSources,
-      newsFilter,
-      finalConfidence: 0,
-      finalDirection: null,
-      signalStrength: 'NONE',
-      recommendedExpiration: 0,
-      shouldTrade: false,
-      rejectReason: `Зовнішні джерела не підтверджують: ${externalSources.sourcesConfirmed}/${externalSources.sourcesTotal}`,
-      summary: `❌ ${externalSources.sourcesConfirmed}/${externalSources.sourcesTotal} джерел підтверджують`,
-    };
-  }
-
-  const finalConfidence = calculateFinalConfidence(eightIndicators, multiTimeframe, externalSources, smcAnalysis);
+  const finalConfidence = calculateFinalConfidence(eightIndicators, multiTimeframe, externalSources, smcAnalysis, direction);
 
   let signalStrength: 'STRONG' | 'MEDIUM' | 'WEAK' | 'NONE';
   if (finalConfidence >= 90) signalStrength = 'STRONG';
   else if (finalConfidence >= 80) signalStrength = 'MEDIUM';
+  else if (finalConfidence >= 70) signalStrength = 'MEDIUM';
   else signalStrength = 'WEAK';
 
-  if (finalConfidence < 80) {
+  if (finalConfidence < 70) {
     return {
       symbol,
       price: smcAnalysis.indicators.close || 0,
@@ -539,7 +491,7 @@ export async function runSignalEngine(
       signalStrength: 'WEAK',
       recommendedExpiration: 0,
       shouldTrade: false,
-      rejectReason: `Впевненість ${finalConfidence}% < 80% мінімум`,
+      rejectReason: `Впевненість ${finalConfidence}% < 70% мінімум`,
       summary: `❌ Впевненість ${finalConfidence}% - занизька для сигналу`,
     };
   }
