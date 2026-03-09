@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [selectedPair, setSelectedPair] = useState<string>("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [noEntryMessage, setNoEntryMessage] = useState("");
+  const [noEntryEngineData, setNoEntryEngineData] = useState<any>(null);
   const [showPairs, setShowPairs] = useState(false);
   const [searchPair, setSearchPair] = useState("");
   const [favorites, setFavorites] = useState<string[]>(() => {
@@ -98,10 +99,12 @@ export default function Dashboard() {
     onSuccess: (data) => {
       if (data.noEntry) {
         setNoEntryMessage(data.analysis || "Точка входу не знайдена.");
+        setNoEntryEngineData(data.engineData || null);
       } else {
         queryClient.invalidateQueries({ queryKey: [api.signals.list.path] });
         queryClient.invalidateQueries({ queryKey: ['/api/pocket-user', pocketId] });
         setNoEntryMessage("");
+        setNoEntryEngineData(null);
       }
       setIsGenerating(false);
     },
@@ -112,6 +115,7 @@ export default function Dashboard() {
     if (!selectedPair) return;
     setIsGenerating(true);
     setNoEntryMessage("");
+    setNoEntryEngineData(null);
     generateSignal.mutate();
   };
 
@@ -233,7 +237,7 @@ export default function Dashboard() {
               <Bot className="w-5 h-5 text-background" />
               <div>
                 <h2 className="text-[13px] font-extrabold text-background">DENI AI BOT</h2>
-                <p className="text-[9px] text-background/70 font-medium">Аналіз 7+ індикаторів в реальному часі</p>
+                <p className="text-[9px] text-background/70 font-medium">8 індикаторів + 3 таймфрейми + 10 джерел</p>
               </div>
             </div>
             <div className="flex items-center gap-1 bg-background/20 rounded-full px-2 py-0.5">
@@ -410,21 +414,25 @@ export default function Dashboard() {
                       transition={{ duration: 3, ease: "easeInOut" }}
                     />
                   </div>
-                  <div className="grid grid-cols-4 gap-1">
-                    {['RSI', 'MACD', 'EMA', 'Stoch'].map((ind, i) => (
+                  <div className="grid grid-cols-3 gap-1">
+                    {[
+                      { label: '8 індикаторів', icon: '📊' },
+                      { label: '3 таймфрейми', icon: '⏱' },
+                      { label: '10 джерел', icon: '🌐' },
+                    ].map((step, i) => (
                       <motion.div
-                        key={ind}
+                        key={step.label}
                         initial={{ opacity: 0, scale: 0.8 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        transition={{ delay: i * 0.4 }}
+                        transition={{ delay: i * 0.6 }}
                         className="text-center py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.04]"
                       >
                         <motion.div
                           animate={{ opacity: [0.4, 1, 0.4] }}
                           transition={{ repeat: Infinity, duration: 1.2, delay: i * 0.3 }}
                         >
-                          <p className="text-[9px] font-bold text-primary">{ind}</p>
-                          <p className="text-[8px] text-muted-foreground">...</p>
+                          <p className="text-[10px]">{step.icon}</p>
+                          <p className="text-[8px] font-bold text-primary">{step.label}</p>
                         </motion.div>
                       </motion.div>
                     ))}
@@ -435,7 +443,7 @@ export default function Dashboard() {
 
             {noEntryMessage && !isGenerating && (
               <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
-                className="p-3 bg-amber-500/8 rounded-xl border border-amber-500/15">
+                className="p-3 bg-amber-500/8 rounded-xl border border-amber-500/15 space-y-2">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="text-amber-400 mt-0.5 shrink-0 w-4 h-4" />
                   <div>
@@ -443,6 +451,22 @@ export default function Dashboard() {
                     <p className="text-[10px] text-foreground/70">{noEntryMessage}</p>
                   </div>
                 </div>
+                {noEntryEngineData && (
+                  <div className="grid grid-cols-3 gap-1.5 pt-1" data-testid="no-entry-engine-stats">
+                    <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-1.5 text-center">
+                      <p className="text-[9px] text-muted-foreground">Індикатори</p>
+                      <p className="text-[11px] font-bold text-foreground">{noEntryEngineData.indicatorAgreement || 'N/A'}</p>
+                    </div>
+                    <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-1.5 text-center">
+                      <p className="text-[9px] text-muted-foreground">Таймфрейми</p>
+                      <p className="text-[11px] font-bold text-foreground">{noEntryEngineData.mtfAgreement || 'N/A'}</p>
+                    </div>
+                    <div className="rounded-lg bg-white/[0.03] border border-white/[0.06] p-1.5 text-center">
+                      <p className="text-[9px] text-muted-foreground">Джерела</p>
+                      <p className="text-[11px] font-bold text-foreground">{noEntryEngineData.sourcesAgreement || 'N/A'}</p>
+                    </div>
+                  </div>
+                )}
               </motion.div>
             )}
           </div>

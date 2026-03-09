@@ -6,9 +6,9 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import OpenAI from "openai";
 import bcrypt from "bcrypt";
-// Ціни тепер тільки від TradingView - forex-prices.ts більше не використовується
 import { getTradingViewAnalysis } from "./tradingview-analysis";
 import { getSMCAnalysis } from "./smc-analysis";
+import { runSignalEngine } from "./signal-engine";
 
 // Admin session storage (in-memory for simplicity)
 const adminSessions = new Map<string, { adminId: number; username: string; expiresAt: Date }>();
@@ -534,12 +534,11 @@ export async function registerRoutes(
     }
   });
 
-  // AI Signal Generation - SMC (Smart Money Concepts) PROFESSIONAL ANALYSIS
+  // AI Signal Generation - 6-Step Verification Pipeline
   app.post("/api/signals/generate", async (req, res) => {
     try {
       const { pairId, timeframe: timeframeStr } = req.body;
       
-      // Convert timeframe to minutes - supports: number (1), string ("5m", "1h", "30")
       const parseTimeframe = (tf: any): number => {
         if (typeof tf === 'number' && tf > 0) return tf;
         if (typeof tf === 'string') {
@@ -561,22 +560,42 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Pair not found" });
       }
 
-      // ========== SMC ANALYSIS - Full Smart Money Concepts ==========
-      const smc = await getSMCAnalysis(pair.symbol, timeframe);
+      // ========== 6-STEP SIGNAL ENGINE ==========
+      const engine = await runSignalEngine(pair.symbol, timeframe);
       
-      const ind = smc.indicators;
-      const currentPrice = ind.close ?? 0;
+      const currentPrice = engine.price;
       
-      // Перевірка що TradingView повернув дані
-      if (!currentPrice || !ind.rsi || !ind.adx) {
+      if (!currentPrice) {
         return res.status(200).json({
           noEntry: true,
           analysis: `TradingView недоступний - спробуйте пізніше`,
           pair,
         });
       }
+
+      if (!engine.shouldTrade || !engine.finalDirection) {
+        return res.status(200).json({
+          noEntry: true,
+          analysis: engine.rejectReason || engine.summary,
+          pair,
+          engineData: {
+            indicatorAgreement: `${engine.eightIndicators.agreementCount}/${engine.eightIndicators.totalIndicators}`,
+            mtfAgreement: `${engine.multiTimeframe.agreementCount}/3`,
+            sourcesAgreement: engine.externalSources.sourcesTotal > 0 
+              ? `${engine.externalSources.sourcesConfirmed}/${engine.externalSources.sourcesTotal}` 
+              : 'N/A',
+            newsBlocked: engine.newsFilter.blocked,
+            confidence: engine.finalConfidence,
+          },
+        });
+      }
+
+      const direction = engine.finalDirection;
+      const dirText = direction === 'UP' ? 'LONG' : 'SHORT';
+      const finalTimeframe = engine.recommendedExpiration;
+      const confidence = engine.finalConfidence;
       
-      // Генеруємо sparkline навколо реальної ціни TV
+      // Generate sparkline around real price
       const isJpy = pair.symbol.includes('JPY');
       const pipValue = isJpy ? 0.01 : 0.0001;
       const priceHistory = [];
@@ -585,116 +604,33 @@ export async function registerRoutes(
         priceHistory.push(currentPrice + pips * pipValue);
       }
       priceHistory.push(currentPrice);
-      
-      // ========== AI ПРИЙМАЄ РІШЕННЯ - дивиться на ринок і вирішує ==========
-      
-      // Готуємо всі дані ринку для ШІ
-      const marketData = {
-        symbol: pair.symbol,
-        timeframe,
-        price: currentPrice,
-        rsi: ind.rsi?.toFixed(1) || 'N/A',
-        adx: ind.adx?.toFixed(1) || 'N/A',
-        macd: ind.macd?.toFixed(5) || 'N/A',
-        macdSignal: ind.macdSignal?.toFixed(5) || 'N/A',
-        macdHist: ind.macdHist?.toFixed(5) || 'N/A',
-        stochK: ind.stochK?.toFixed(1) || 'N/A',
-        stochD: ind.stochD?.toFixed(1) || 'N/A',
-        cci: ind.cci?.toFixed(1) || 'N/A',
-        bbPosition: ind.bbPosition ? (ind.bbPosition * 100).toFixed(0) + '%' : 'N/A',
-        tvRecommend: ind.recommendAll ? (ind.recommendAll * 100).toFixed(0) + '%' : 'N/A',
-        ema20: ind.ema20?.toFixed(5) || 'N/A',
-        ema50: ind.ema50?.toFixed(5) || 'N/A',
-        atr: ind.atr?.toFixed(5) || 'N/A',
-      };
-      
-      // ШІ аналізує ринок і приймає рішення
-      let aiDecision: { direction: 'UP' | 'DOWN' | null; confidence: number; analysis: string; recommendedTimeframe?: number } = {
-        direction: null,
-        confidence: 0,
-        analysis: ''
-      };
-      
+
+      // Build AI analysis with enhanced data
+      let aiAnalysisText = '';
       try {
-        // Визначаємо силу сигналів
-        const rsiValue = parseFloat(marketData.rsi);
-        const stochK = parseFloat(marketData.stochK);
-        const stochD = parseFloat(marketData.stochD);
-        const macdHist = parseFloat(marketData.macdHist);
-        const bbPos = parseFloat(marketData.bbPosition);
-        const cciValue = parseFloat(marketData.cci);
-        const adxValue = parseFloat(marketData.adx);
+        const ind = engine.smcAnalysis.indicators;
+        const indBreakdown = engine.eightIndicators.indicators
+          .filter(i => i.direction === direction)
+          .map(i => `${i.name}: ${i.reason}`)
+          .join('\n');
         
-        // Підготовка сигналів для ШІ
-        const signals = {
-          rsi: rsiValue > 70 ? 'СИЛЬНО перекуплено (SHORT)' : 
-               rsiValue > 60 ? 'помірно перекуплено' :
-               rsiValue < 30 ? 'СИЛЬНО перепродано (LONG)' : 
-               rsiValue < 40 ? 'помірно перепродано' : 'нейтрально',
-          stoch: stochK > 80 && stochK < stochD ? 'ведмежий кросовер вгорі (SHORT)' :
-                 stochK < 20 && stochK > stochD ? 'бичачий кросовер внизу (LONG)' :
-                 stochK > stochD ? 'бичачий імпульс' : 'ведмежий імпульс',
-          macd: macdHist > 0.0005 ? 'сильний бичачий' : 
-                macdHist < -0.0005 ? 'сильний ведмежий' :
-                macdHist > 0 ? 'слабкий бичачий' : 'слабкий ведмежий',
-          bb: bbPos > 85 ? 'ЕКСТРЕМУМ верхня межа (SHORT)' :
-              bbPos > 70 ? 'біля верхньої межі' :
-              bbPos < 15 ? 'ЕКСТРЕМУМ нижня межа (LONG)' :
-              bbPos < 30 ? 'біля нижньої межі' : 'в середині каналу',
-          cci: cciValue > 150 ? 'СИЛЬНО перекуплено' :
-               cciValue > 100 ? 'перекуплено' :
-               cciValue < -150 ? 'СИЛЬНО перепродано' :
-               cciValue < -100 ? 'перепродано' : 'нейтрально',
-          trend: adxValue > 30 ? 'СИЛЬНИЙ тренд' : adxValue > 20 ? 'помірний тренд' : 'слабкий/бічний'
-        };
+        const mtfBreakdown = engine.multiTimeframe.timeframes
+          .map(t => `${t.timeframe}: ${t.direction}`)
+          .join(', ');
 
-        const systemPrompt = `Ти — експерт бінарних опціонів з 10 років досвіду. Даєш ТОЧНІ сигнали.
+        const systemPrompt = `Ти — експерт бінарних опціонів. Коротко поясни сигнал українською (2-3 речення).
+Дані вже перевірені 6-кроковою системою верифікації. Опиши ЧОМУ саме цей напрямок.`;
 
-⚡ ЛОГІКА БІНАРНИХ ОПЦІОНІВ:
-- UP = ціна піде ВГОРУ через X хвилин
-- DOWN = ціна піде ВНИЗ через X хвилин
+        const userPrompt = `${pair.symbol} → ${dirText} | Впевненість: ${confidence}%
 
-🧠 СТРАТЕГІЯ ТОЧНИХ СИГНАЛІВ:
+Індикатори (${engine.eightIndicators.agreementCount}/8 підтверджують):
+${indBreakdown}
 
-📉 СИГНАЛ DOWN (продаж):
-1. RSI > 65 = ринок перекуплений, чекаємо падіння
-2. Stochastic: K перетинає D зверху вниз = розворот вниз
-3. BB > 70% = ціна біля верху каналу, буде корекція
-4. CCI > 100 = екстремальна перекупленість
-5. MACD гістограма < 0 = ведмежий імпульс
+Таймфрейми (${engine.multiTimeframe.agreementCount}/3 підтверджують): ${mtfBreakdown}
+Зовнішні джерела: ${engine.externalSources.sourcesConfirmed}/${engine.externalSources.sourcesTotal} підтверджують
 
-📈 СИГНАЛ UP (покупка):
-1. RSI < 35 = ринок перепроданий, чекаємо зростання
-2. Stochastic: K перетинає D знизу вгору = розворот вгору
-3. BB < 30% = ціна біля низу каналу, буде відскок
-4. CCI < -100 = екстремальна перепроданість
-5. MACD гістограма > 0 = бичачий імпульс
-
-⏱️ ВИБІР ТАЙМФРЕЙМУ:
-• 3 хв: дуже сильний сигнал (RSI екстрем + Stoch кросовер)
-• 5 хв: сильний сигнал (2+ індикатори)
-• 10-15 хв: помірний сигнал
-• 30 хв: слабший сигнал, потрібен час
-
-🎯 ПРАВИЛО: Дивись на БІЛЬШІСТЬ індикаторів. Якщо 3 з 5 показують DOWN - давай DOWN. Якщо 3 з 5 показують UP - давай UP.
-
-ФОРМАТ (тільки JSON):
-{"direction":"UP"/"DOWN","timeframe":3/5/10/15/30,"confidence":78-88,"analysis":"ВВЕРХ/ВНИЗ на X хв - чому саме цей напрямок"}`;
-
-        const userPrompt = `📊 ${pair.symbol} - АНАЛІЗУЙ І ОБЕРИ ТАЙМФРЕЙМ
-
-💰 ПОТОЧНА ЦІНА: ${currentPrice.toFixed(5)}
-
-📈 ІНДИКАТОРИ:
-• RSI(14): ${marketData.rsi} → ${signals.rsi}
-• Stochastic: K=${marketData.stochK}, D=${marketData.stochD} → ${signals.stoch}
-• MACD Hist: ${marketData.macdHist} → ${signals.macd}
-• Bollinger: ${marketData.bbPosition}% → ${signals.bb}
-• CCI: ${marketData.cci} → ${signals.cci}
-• ADX: ${marketData.adx} → ${signals.trend}
-• TradingView: ${marketData.tvRecommend}
-
-🎯 Визнач напрямок (UP/DOWN) і оптимальний таймфрейм (1/3/5 хв):`;
+RSI: ${ind.rsi?.toFixed(1)}, MACD: ${ind.macd > ind.macdSignal ? 'бичачий' : 'ведмежий'}, Stoch: K=${ind.stochK?.toFixed(0)}
+BB: ${(ind.bbPosition * 100).toFixed(0)}%, EMA50/200: ${ind.ema50 > ind.ema200 ? 'бичачий кросс' : 'ведмежий кросс'}`;
 
         const aiResponse = await openai.chat.completions.create({
           model: "gpt-4o-mini",
@@ -702,57 +638,21 @@ export async function registerRoutes(
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
-          max_tokens: 200,
-          temperature: 0.2,
+          max_tokens: 150,
+          temperature: 0.3,
         });
         
-        const responseText = aiResponse.choices[0]?.message?.content || '';
-        console.log(`[AI] ${pair.symbol} response:`, responseText);
-        
-        // Парсимо JSON відповідь
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          if (parsed.direction === 'UP' || parsed.direction === 'DOWN') {
-            // Використовуємо таймфрейм рекомендований ШІ
-            const validTimeframes = [1, 3, 5, 10, 15, 30, 60, 120, 180, 240];
-            const aiTimeframe = validTimeframes.includes(parsed.timeframe) ? parsed.timeframe : 3;
-            aiDecision = {
-              direction: parsed.direction,
-              confidence: Math.max(70, Math.min(95, parsed.confidence || 75)),
-              analysis: parsed.analysis || `${parsed.direction === 'UP' ? 'Купівля' : 'Продаж'} ${pair.symbol}`,
-              recommendedTimeframe: aiTimeframe
-            };
-            console.log(`[AI TIMEFRAME] ${pair.symbol}: Рекомендовано ${aiTimeframe} хв`);
-          }
-        }
+        aiAnalysisText = aiResponse.choices[0]?.message?.content || '';
       } catch (e) {
-        console.error("AI decision error:", e);
+        aiAnalysisText = engine.summary;
       }
       
-      // Якщо ШІ не дав сигнал - немає входу
-      if (!aiDecision.direction) {
-        return res.status(200).json({
-          noEntry: true,
-          analysis: aiDecision.analysis || 'ШІ не знайшов чіткого сигналу',
-          pair,
-        });
-      }
+      const strengthLabel = engine.signalStrength === 'STRONG' ? '🔥 СИЛЬНИЙ' : '⚡ СЕРЕДНІЙ';
+      const analysisDetails = `${confidence}% ${dirText} | ${pair.symbol} | ${finalTimeframe}хв | ${strengthLabel}\n${engine.eightIndicators.agreementCount}/8 інд. | ${engine.multiTimeframe.agreementCount}/3 ТФ | ${engine.externalSources.sourcesConfirmed}/${engine.externalSources.sourcesTotal} джерел\n${aiAnalysisText}`;
       
-      const direction = aiDecision.direction;
-      const dirText = direction === 'UP' ? 'LONG' : 'SHORT';
-      // Використовуємо рекомендований ШІ таймфрейм
-      const finalTimeframe = aiDecision.recommendedTimeframe || timeframe;
+      console.log(`[SIGNAL] ${pair.symbol}: ${dirText} ${confidence}% | ${finalTimeframe}хв | ${engine.signalStrength}`);
       
-      // ========== CREATE SIGNAL ==========
       const sparkline = priceHistory.slice(-6);
-      const confidence = aiDecision.confidence;
-      
-      // AI analysis display з таймфреймом
-      const analysisDetails = `${confidence}% ${dirText} | ${pair.symbol} | ${finalTimeframe}хв\n${aiDecision.analysis}`;
-      
-      console.log(`[AI SIGNAL] ${pair.symbol}: ${dirText} ${confidence}% | Таймфрейм: ${finalTimeframe}хв`);
-      
       const pocketIdHeader = req.headers['x-pocket-id'] as string || null;
       const signal = await storage.createSignal({
         pairId,
@@ -770,11 +670,26 @@ export async function registerRoutes(
         ...signal,
         pair,
         confidence,
-        aiAnalysis: aiDecision.analysis,
-        recommendedTimeframe: finalTimeframe
+        aiAnalysis: aiAnalysisText,
+        recommendedTimeframe: finalTimeframe,
+        signalStrength: engine.signalStrength,
+        engineData: {
+          indicatorAgreement: `${engine.eightIndicators.agreementCount}/${engine.eightIndicators.totalIndicators}`,
+          indicators: engine.eightIndicators.indicators.map(i => ({
+            name: i.name,
+            direction: i.direction,
+            reason: i.reason,
+          })),
+          mtfAgreement: `${engine.multiTimeframe.agreementCount}/3`,
+          timeframes: engine.multiTimeframe.timeframes.map(t => ({
+            timeframe: t.timeframe,
+            direction: t.direction,
+          })),
+          sourcesAgreement: `${engine.externalSources.sourcesConfirmed}/${engine.externalSources.sourcesTotal}`,
+          newsOk: !engine.newsFilter.blocked,
+        },
       };
 
-      // Increment user signal count
       const poId = req.headers['x-pocket-id'] as string;
       if (poId) {
         try { await storage.incrementSignalCount(poId); } catch (e) { /* ignore */ }
@@ -783,7 +698,7 @@ export async function registerRoutes(
       return res.status(201).json(enrichedSignal);
 
     } catch (err) {
-      console.error("SMC Signal generation error:", err);
+      console.error("Signal Engine error:", err);
       res.status(500).json({ message: "Failed to generate signal" });
     }
   });

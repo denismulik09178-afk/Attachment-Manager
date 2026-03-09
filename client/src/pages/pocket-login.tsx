@@ -45,8 +45,8 @@ export default function PocketLogin({ onLogin }: PocketLoginProps) {
 
   const features = [
     { icon: Zap, text: "ШІ-сигнали в реальному часі", color: "text-primary" },
-    { icon: BarChart3, text: "7+ технічних індикаторів", color: "text-blue-400" },
-    { icon: TrendingUp, text: "Точність від 67%+", color: "text-emerald-400" },
+    { icon: BarChart3, text: "8 індикаторів + 10 джерел", color: "text-blue-400" },
+    { icon: TrendingUp, text: "6-крокова верифікація", color: "text-emerald-400" },
     { icon: ShieldCheck, text: "Безпечний та анонімний", color: "text-amber-400" },
   ];
 

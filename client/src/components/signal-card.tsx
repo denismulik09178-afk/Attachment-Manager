@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge";
-import { ArrowUp, ArrowDown, Trophy, XCircle, Timer, Clock, Target, TrendingUp, TrendingDown, Brain } from "lucide-react";
+import { ArrowUp, ArrowDown, Trophy, XCircle, Timer, Clock, Target, TrendingUp, TrendingDown, Brain, Shield, BarChart3, Layers, Globe, Flame, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 import { useEffect, useState, useCallback } from "react";
 import { TradingViewWidget } from "./tradingview-widget";
@@ -152,13 +152,47 @@ export function SignalCard({ signal, onClose }: SignalCardProps) {
           </div>
         </div>
 
+        {signal.engineData && (
+          <div className="grid grid-cols-4 gap-1" data-testid="signal-engine-stats">
+            <div className="rounded-lg bg-primary/5 border border-primary/10 p-1.5 text-center">
+              <BarChart3 className="w-3 h-3 text-primary mx-auto mb-0.5" />
+              <p className="text-[10px] font-black text-primary">{signal.engineData.indicatorAgreement}</p>
+              <p className="text-[7px] text-muted-foreground">Індикат.</p>
+            </div>
+            <div className="rounded-lg bg-blue-500/5 border border-blue-500/10 p-1.5 text-center">
+              <Layers className="w-3 h-3 text-blue-400 mx-auto mb-0.5" />
+              <p className="text-[10px] font-black text-blue-400">{signal.engineData.mtfAgreement}</p>
+              <p className="text-[7px] text-muted-foreground">Таймфр.</p>
+            </div>
+            <div className="rounded-lg bg-violet-500/5 border border-violet-500/10 p-1.5 text-center">
+              <Globe className="w-3 h-3 text-violet-400 mx-auto mb-0.5" />
+              <p className="text-[10px] font-black text-violet-400">{signal.engineData.sourcesAgreement}</p>
+              <p className="text-[7px] text-muted-foreground">Джерела</p>
+            </div>
+            <div className={`rounded-lg p-1.5 text-center ${
+              signal.signalStrength === 'STRONG' 
+                ? 'bg-emerald-500/5 border border-emerald-500/10' 
+                : 'bg-amber-500/5 border border-amber-500/10'
+            }`}>
+              {signal.signalStrength === 'STRONG' 
+                ? <Flame className="w-3 h-3 text-emerald-400 mx-auto mb-0.5" />
+                : <Zap className="w-3 h-3 text-amber-400 mx-auto mb-0.5" />
+              }
+              <p className={`text-[10px] font-black ${signal.signalStrength === 'STRONG' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {signal.confidence}%
+              </p>
+              <p className="text-[7px] text-muted-foreground">Сила</p>
+            </div>
+          </div>
+        )}
+
         {signal.analysis && (
           <div className="p-2.5 rounded-xl bg-primary/5 border border-primary/10">
             <div className="flex items-start gap-2">
               <Brain className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
               <div>
-                <p className="text-[9px] font-bold text-primary mb-0.5">ШІ Аналіз</p>
-                <p className="text-[10px] text-foreground/70 leading-relaxed">{signal.analysis}</p>
+                <p className="text-[9px] font-bold text-primary mb-0.5">ШІ Аналіз (6-крокова верифікація)</p>
+                <p className="text-[10px] text-foreground/70 leading-relaxed whitespace-pre-line">{signal.analysis}</p>
               </div>
             </div>
           </div>

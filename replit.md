@@ -37,12 +37,15 @@ This is a web application that provides AI-powered trading signals for Forex mar
   - `GET /api/market/news` — sessions, volatility, economic calendar, tips
   - `GET /api/market/overview` — live prices for 4 major pairs from TradingView
 
-### AI-Powered Signal Generation
-- **AI as Decision Maker**: GPT-4o-mini analyzes market and decides UP/DOWN
-- **Binary Options Focus**: Optimized for short timeframes (1-30 minutes)
-- **Smart Signal Preprocessing**: RSI, Stochastic, Bollinger Bands, CCI, ADX, MACD
-- **AI Chooses Timeframe**: 1/3/5/10/15/30 min based on signal strength
-- **Ukrainian Explanations**: All explanations in Ukrainian
+### 6-Step Signal Verification Pipeline (March 2026)
+- **Step 1 — 8-Indicator Analysis**: RSI, MACD, EMA 50/200, Bollinger Bands, Stochastic, Volume/Momentum, Support/Resistance, Price Action. Signal only if 5+ agree on direction.
+- **Step 2 — Multi-Timeframe Confirmation**: M1, M5, M15 analyzed independently via TradingView. Confirmed if 2+ timeframes agree.
+- **Step 3 — External Source Verification**: TradingView recommendations across 6 timeframes (M1, M5, M15, H1, H4, D1) × Recommend.All/MA/Other = 10+ data points. Majority must confirm direction.
+- **Step 4 — News Filter**: Static economic calendar with high-impact events (NFP, FOMC, ECB, BOE, BOJ). Blocks signals 30 minutes around events.
+- **Step 5 — Auto-Expiration**: STRONG (90-100%) → 5-10min, MEDIUM (80-89%) → 3-5min, <80% → no signal.
+- **Step 6 — Confidence Display**: Weighted combination of indicator agreement (40%), MTF confirmation (25%), external sources (20%), SMC analysis (15%).
+- **AI Enhancement**: GPT-4o-mini generates Ukrainian-language explanation of verified signals.
+- **Key Files**: `server/signal-engine.ts` (orchestrator), `server/external-sources.ts`, `server/news-filter.ts`, `server/smc-analysis.ts`
 
 ## User Preferences
 
@@ -93,6 +96,9 @@ Preferred communication style: Simple, everyday language.
 - `client/src/lib/currency-flags.ts` — Currency color/code mapping
 - `client/src/index.css` — Theme & utility classes
 - `server/routes.ts` — All API endpoints
+- `server/signal-engine.ts` — 6-step verification pipeline orchestrator
+- `server/external-sources.ts` — TradingView multi-timeframe source verification
+- `server/news-filter.ts` — Economic calendar news filter
 - `server/smc-analysis.ts` — TradingView indicator analysis
 - `shared/schema.ts` — Database schema
 
